@@ -10,7 +10,7 @@
 ### Sample Projects
 
 Add all sample projects in the path 
-`./Samples/<your-sample-project-directory>/<your-c-file>.c`.
+`/Samples/<your-sample-project-directory>/<your-c-file>.c`.
 
 There may be multiple users with their own sample file for the 
 sample projects. Do not edit the files contributed by other users.
