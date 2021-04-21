@@ -7,7 +7,7 @@ compilation using MSVC(for windows):
 --------------------------------------
 In developer cmd:
 
-set include_path="PATH TO THE INCLUDE FOLDER"
+set inc_path="PATH TO THE INCLUDE FOLDER"
 set lib_path="PATH TO THE LIB FOLDER"
 set exec_name="Game Of Life.exe"
 
