@@ -6,8 +6,12 @@ Consult http://libsdl.org/ to get SDL2(zlib license) for your platform.
 compilation using MSVC(for windows):
 --------------------------------------
 In developer cmd:
+rem Do be wary that you'll need to put the path like D:/foo/bar or D:\\foo\\bar (because windows and escape sequences)
+rem also, when doing creating a variable using set, make sure that the = sign is right next to the var name like in the code, otherwise you'll need to add that extra space when using the variable as well eg
+rem set var = "Hello"
+rem echo %var %
 
-set inc_path="PATH TO THE INCLUDE FOLDER"
+set inc_path="PATH TO THE INCLUDE FOLDER"						
 set lib_path="PATH TO THE LIB FOLDER"
 set exec_name="Game Of Life.exe"
 
@@ -22,7 +26,7 @@ gcc main.c -lSDL2 -o main
 --------------------------------------
 */
 
-#include <SDL2/SDL.h>
+#include <SDL2/SDL.h> //while this is the way you can access SDL headers in linux, windows users will need to create a SDL2 folder where they can put the include files
 #include <string.h>
 #include <stdlib.h>
 
@@ -45,7 +49,7 @@ int init_sdl_and_create_window()
 	_renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_ACCELERATED);
 	if (_renderer == NULL)
 		return false;
-	
+
 	SDL_SetRenderDrawColor(_renderer, 0, 0, 0, 255);
 	SDL_RenderClear(_renderer);
 	SDL_RenderPresent(_renderer);
@@ -60,9 +64,9 @@ void clean_up()
 }
 
 //to make creating the cells more simplified
-void set(int x, int y, char* string, int* state )
+void set(int x, int y, char *string, int *state)
 {
-	for ( int p = 0; *string != '\0'; string++, p++)
+	for (int p = 0; *string != '\0'; string++, p++)
 		state[y * ROW_WIDTH + x + p] = *string == '#' ? 1 : 0;
 }
 
@@ -75,11 +79,10 @@ int main(int argc, char **argv)
 		int *state = malloc(sizeof(int) * (ROW_WIDTH * COL_WIDTH));
 		memset(output, 0, ROW_WIDTH * COL_WIDTH * sizeof(int));
 		memset(state, 0, ROW_WIDTH * COL_WIDTH * sizeof(int));
-		
-		
+
 		// Infinite Growth
 		set(20, 50, "########.#####...###......#######.#####", state);
-		
+
 		//can uncomment these and test
 		/*
 		// Gosper Glider Gun
@@ -126,7 +129,7 @@ int main(int argc, char **argv)
 		set(20, 37, "#...#............#..#.", state);
 		set(20, 38, ".####.................", state);
 		*/
-		
+
 		int is_running = true;
 		int begin = false;
 
@@ -140,20 +143,20 @@ int main(int argc, char **argv)
 					is_running = false;
 				if (event.type == SDL_KEYDOWN)
 				{
-					if(event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+					if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
 						is_running = false;
-					if(event.key.keysym.scancode == SDL_SCANCODE_SPACE)
+					if (event.key.keysym.scancode == SDL_SCANCODE_SPACE)
 						begin = !begin;
 				}
 			}
-			
+
 			//Pauses the game
 			if (!begin)
 				continue;
-			
+
 			for (int i = 0; i < ROW_WIDTH * COL_WIDTH; i++)
 				output[i] = state[i];
-			
+
 			SDL_SetRenderDrawColor(_renderer, 255, 0, 0, 255);
 			SDL_RenderClear(_renderer);
 			SDL_Rect rect = {0, 0, 8, 8}; //creating 8x8 cells
@@ -163,14 +166,14 @@ int main(int argc, char **argv)
 				for (int x = 1; x < ROW_WIDTH - 1; x++)
 				{
 					int neighbours = cell(x - 1, y - 1) + cell(x, y - 1) + cell(x + 1, y - 1) +
-									 cell(x - 1, y + 0) + 		0 		 + cell(x + 1, y + 0) +
-									 cell(x - 1, y + 1) + cell(x, y + 1)  + cell(x + 1, y + 1);
-					
+									 cell(x - 1, y + 0) + 0 + cell(x + 1, y + 0) +
+									 cell(x - 1, y + 1) + cell(x, y + 1) + cell(x + 1, y + 1);
+
 					if (cell(x, y) == 1)
 						state[y * ROW_WIDTH + x] = neighbours == 2 || neighbours == 3;
 					else
 						state[y * ROW_WIDTH + x] = neighbours == 3;
-					
+
 					int value = cell(x, y);
 					SDL_SetRenderDrawColor(_renderer, value * 255, value * 255, value * 255, 255);
 					rect.x = x * rect.w;
