@@ -3,6 +3,7 @@
 This README contains a list of resources that will be required as you get used to programming in C. 
 For more of a walkthrough guide, visit the [wiki](https://github.com/IT-Club-Pulchowk/C-Programming-Guide/wiki) page.
 
+
 ## Compilers
 * [GCC](https://gcc.gnu.org/)
 * [Clang](https://clang.llvm.org/)
