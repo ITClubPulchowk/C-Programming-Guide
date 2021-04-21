@@ -27,3 +27,6 @@ For more of a walkthrough guide, visit the [wiki](https://github.com/IT-Club-Pul
 
 ## Reference Books (Recommended)
 * [The C Programming Language (2nd ed.)](https://www.amazon.com/Programming-Language-2nd-Brian-Kernighan/dp/0131103628) - Brian Kernighan and Dennis Ritchie, available in Pulchowk Campus Library
+
+## Tutorial Video
+* [HandmadeHero](https://www.youtube.com/watch?v=F3ntGDm6hOs&list=PLEMXAbCVnmY6RverunClc_DMLNDd3ASRp)
