@@ -56,7 +56,7 @@ process consistent across all systems.
 Create build.bat (Windows) and build.sh (Linux) that contains the 
 build instructions for your program depending upon the system. The
 build file should be placed in the path - 
-`./Samples/<your-sample-project-directory>/bin/<build-script>`
+`./Samples/<your-sample-project-directory>/<build-scripts>`
 
 Please follow the following guidelines as much as possible when 
 creating a build file :
@@ -65,6 +65,16 @@ creating a build file :
 - The build files should take input to all the variables required for the build process.
 - The output of the files should be placed in directory `bin` relative to the local project directory.
 - All the bin directories (including object files) are to be ignored in the repo.
+
+#### Final Directory Structure
+
+Your final directory structure may look something like this : 
+```
+[/Samples/<your-sample-project-directory>/]
+├── main.c                 # your main program
+├── build.bat              # build instructions for windows
+├── build.sh               # build instructions for linux (or unix shell, mac)
+```
 
 ### README.md
 
