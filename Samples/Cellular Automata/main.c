@@ -1,17 +1,17 @@
 /*
 
-Consult http://libsdl.org/ to get SDL for your platform
+Consult http://libsdl.org/ to get SDL2(zlib license) for your platform.
 
 --------------------------------------
 compilation using MSVC(for windows):
 --------------------------------------
-In developer powershell:
+In developer cmd:
 
-$include_path = "PATH TO THE INCLUDE FOLDER"
-$lib_path = "PATH TO THE LIB FOLDER"
-$exec_name = "Game Of Life.exe"
+set include_path="PATH TO THE INCLUDE FOLDER"
+set lib_path="PATH TO THE LIB FOLDER"
+set exec_name="Game Of Life.exe"
 
-cl .\main.c /I$include_path /Fe$exec_name /link /LIBPATH:$lib_path SDL2.lib SDL2main.lib /subsystem:console
+cl .\main.c /Fe%exec_name% /I%inc_path% /link /LIBPATH:%lib_path% SDL2.lib SDL2main.lib /subsystem:console
 
 --------------------------------------
 compilation using gcc(for linux):
