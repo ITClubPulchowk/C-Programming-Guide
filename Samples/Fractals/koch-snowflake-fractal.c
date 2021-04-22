@@ -1,3 +1,27 @@
+/*
+ * Libraries
+ *
+ * Consult http://libsdl.org/ to get SDL2(zlib license) for your 
+ * platform.
+
+*/
+
+// Authors: Pranjal Pokharel (@pranjalpokharel7)
+
+/*
+ * Koch Snowflake
+ * --------------------------------------------------------------------------- 
+ * Koch Snowflake is a popular fractal pattern. You can refer to 
+ * wikipidia for a more general introduction:
+ * https://en.wikipedia.org/wiki/Koch_snowflake
+ *
+ * Additionally, you can refer to this short video:
+ * https://www.youtube.com/watch?v=xlZHY0srIew
+ *
+ * This is a very basic implementation of the koch snowflake. 
+ * Contributions and suggestions are welcome.
+*/
+
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_events.h>
 #include <SDL2/SDL_error.h>
@@ -17,6 +41,8 @@ struct Program_Window_Parameters {
   SDL_Event event;
 
 }*main_window;
+
+// sdl parameters init
 
 int init_sdl_and_window(){
   if(SDL_Init(SDL_INIT_EVERYTHING) < 0) {
@@ -105,7 +131,7 @@ void set_triangle_vectors(vector *c, vector *d, vector *e,
   e->x = start.x + two_third_length.x;
   e->y = start.y + two_third_length.y;
 
-  // rotate by 60 degrees angle to be given in radians
+  // rotate by 60 degrees, angle to be given in radians
   // sign of magnitude subject to change
   rotate_vector(&one_third_length, 1.0472); 
   d->x = c->x + one_third_length.x;
@@ -125,7 +151,7 @@ void add_line(koch_line *line_array, vector start_point,
 
 void calculate_koch_curve(koch_line *line_array, vector initial_start_point, 
     vector initial_end_point){
-  // initialize koch curve
+  // initialize koch curve with the first base line
   add_line(line_array, initial_start_point, initial_end_point, 0);
 
   for (int i = 0; i < MAX_ITER ; i++){
@@ -160,6 +186,11 @@ void calculate_koch_curve(koch_line *line_array, vector initial_start_point,
 int main(){
   int final_array_size = pow(4, MAX_ITER);
 
+  // instead of creating a single array that accomodates all 3 initial curves,
+  // we do them separately as the calculate_koch_curve() is a more general
+  // function implementation that can be used for a single line no matter the
+  // vector magnitude and direction
+  
   koch_line *line1_array = malloc(final_array_size * sizeof *line1_array);
   vector line1_start_point = { 200, 200 };
   vector line1_end_point = { 800, 200 };
@@ -183,15 +214,17 @@ int main(){
           main_window->_gwindow_open = false;
         }
       }
+
+      // change background color from here
       SDL_SetRenderDrawColor(main_window->_grenderer, 255, 255, 
           255, 255);
       SDL_RenderClear(main_window->_grenderer);
 
+      // change koch curve color from here
       SDL_SetRenderDrawColor(main_window->_grenderer, 0, 0, 
           0, 255);
+
       for (int i = 0; i < pow(4, MAX_ITER); i++){
-        //printf("(%d,%d) (%d,%d)\n",line_array[i].start.x, line_array[i].start.y,
-        //    line_array[i].end.x, line_array[i].end.y);
         SDL_RenderDrawLine(main_window->_grenderer, 
             line1_array[i].start.x, line1_array[i].start.y,
             line1_array[i].end.x, line1_array[i].end.y);
@@ -202,6 +235,7 @@ int main(){
             line3_array[i].start.x, line3_array[i].start.y,
             line3_array[i].end.x, line3_array[i].end.y);
       }
+
       SDL_RenderPresent(main_window->_grenderer);
     }
   }
