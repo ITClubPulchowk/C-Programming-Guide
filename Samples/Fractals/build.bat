@@ -1,27 +1,25 @@
 @echo off
 
 setlocal
+pushd ..
 
-set SDL2_Include="C:/Libraries/SDL2/"
-set SDL2_Library="C:/Libraries/SDL2/lib/x64/"
-set SDL2_DLL="C:\Libraries\SDL2\lib\x64\SDL2.dll"
+if not exist "Libraries" mkdir Libraries
+if exist "Libraries/SDL2" goto SkipDownload
 
-rem Check if the libraries exist in default directory
-if exist %SDL2_DLL%  if exist %SDL2_Include% if exist %SDL2_Library% goto StartBuildProcess
+pushd Libraries
+mkdir SDL2
+curl "https://www.libsdl.org/release/SDL2-devel-2.0.14-VC.zip" --output SDL2.zip
+tar -zxvf SDL2.zip -C SDL2
+del SDL2.zip
+ren "SDL2\SDL2-2.0.14\include" "SDL2"
+popd
 
-echo Searching for SDL2 library
-echo Note: The SDL2 include and library directory path should use "/" for directory change and "\" for path to DLL file (Windows eh...)
-echo Note: The given SDL2 include path should contain the directory name SDL2 having all the header files for SDL2
-echo Note: The given SDL2 library path should contain the files SDL2main.lib and SDL2.lib
-echo Note: The given SDL2 DLL path should contain SDL2.dll file
-echo Note: SDL2 include directory and library directoy must end with "/" and dll path directory end with "\"
-echo Note: When compiling from MSVC, note x86 and x64 bit libraries with the VS Developer Prompt
-set /p SDL2_Include="SDL2 Include path: "
-set /p SDL2_Library="SDL2 Library path: "
-set /p SDL2_DLL_Path="SDL2 DLL path: "
-set SDL2_DLL=%SDL2_DLL_Path%"SDL2.dll"
+:SkipDownload
+popd
 
-:StartBuildProcess
+set SDL2_Include="../../Libraries/SDL2/SDL2-2.0.14/"
+set SDL2_Library="../../Libraries/SDL2/SDL2-2.0.14/lib/x64/"
+set SDL2_DLL="..\..\Libraries\SDL2\SDL2-2.0.14\lib\x64\SDL2.dll"
 
 if not exist "bin" mkdir bin
 
