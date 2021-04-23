@@ -25,6 +25,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_events.h>
 #include <SDL2/SDL_error.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 
@@ -38,63 +39,59 @@ struct Program_Window_Parameters {
 
   SDL_Window* _gwindow;
   SDL_Renderer* _grenderer;
-  SDL_Event event;
-
-}*main_window;
+}main_window;
 
 // sdl parameters init
 
 int init_sdl_and_window(){
   if(SDL_Init(SDL_INIT_EVERYTHING) < 0) {
-    printf("Failed to initialize : %s", SDL_GetError());
+    fprintf(stderr, "Failed to initialize : %s", SDL_GetError());
     return false;
   } 
 
   if( !SDL_SetHint( SDL_HINT_RENDER_SCALE_QUALITY, "1" ) )
   {
-    printf( "Warning: Linear texture filtering not enabled!" );
+    fprintf(stderr, "Warning: Linear texture filtering not enabled!" );
   }
 
   // define main window parameters
-  main_window = malloc(sizeof *main_window);
-  main_window->_gwindow = NULL;
-  main_window->_grenderer = NULL;
-  main_window->SCREEN_HEIGHT = 1000;
-  main_window->SCREEN_WIDTH = 1000;
+  main_window._gwindow = NULL;
+  main_window._grenderer = NULL;
+  main_window.SCREEN_HEIGHT = 1000;
+  main_window.SCREEN_WIDTH = 1000;
 
-  main_window->_gwindow = SDL_CreateWindow("SDL_Window", 
-      SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
-      main_window->SCREEN_WIDTH, main_window->SCREEN_HEIGHT, 
+  main_window._gwindow = SDL_CreateWindow("SDL_Window", 
+      SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
+      main_window.SCREEN_WIDTH, main_window.SCREEN_HEIGHT, 
       SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN);
 
-  if(main_window->_gwindow == NULL) {
-    printf("Failed to create window : %s", SDL_GetError());
+  if(main_window._gwindow == NULL) {
+    fprintf(stderr, "Failed to create window : %s", SDL_GetError());
     return false;
   } 
 
-  main_window->_grenderer = SDL_CreateRenderer( main_window->_gwindow, 
+  main_window._grenderer = SDL_CreateRenderer( main_window._gwindow, 
       -1, SDL_RENDERER_ACCELERATED );
 
-  if(main_window->_grenderer == NULL)
+  if(main_window._grenderer == NULL)
   {
-    printf( "Renderer could not be created! SDL Error: %s\n", 
+    fprintf(stderr, "Renderer could not be created! SDL Error: %s\n", 
         SDL_GetError() );
     return false;
   }
 
-  main_window->_gwindow_open = true;
+  main_window._gwindow_open = true;
   return true;
 }
 
 void clean_up_and_close() {
-  SDL_DestroyWindow(main_window->_gwindow);
-  main_window->_gwindow = NULL;
+  SDL_DestroyWindow(main_window._gwindow);
+  main_window._gwindow = NULL;
 
-  SDL_DestroyRenderer(main_window->_grenderer);
-  main_window->_grenderer = NULL;
+  SDL_DestroyRenderer(main_window._grenderer);
+  main_window._grenderer = NULL;
 
   SDL_Quit();
-  free(main_window);
 }
 
 // koch curve
@@ -153,11 +150,11 @@ void calculate_koch_curve(koch_line *line_array, vector initial_start_point,
     vector initial_end_point){
   // initialize koch curve with the first base line
   add_line(line_array, initial_start_point, initial_end_point, 0);
+  int final_array_size = pow(4, MAX_ITER);
+  koch_line *new_line_array = malloc( final_array_size * sizeof *new_line_array);
 
   for (int i = 0; i < MAX_ITER ; i++){
-
     int array_size = pow(4, i+1); // each line produces 4 more sub-lines
-    koch_line *new_line_array = malloc( array_size * sizeof *new_line_array);
 
     for (int j = 0; j < array_size/4; j++){
       vector triangle_base_start, triangle_base_end, triangle_top;
@@ -179,11 +176,11 @@ void calculate_koch_curve(koch_line *line_array, vector initial_start_point,
     for (int k = 0; k < array_size; k++) 
       line_array[k] = new_line_array[k];
 
-    free(new_line_array);
   }
+  free(new_line_array);
 }
 
-int main(){
+int main(int argc, char **argv){
   int final_array_size = pow(4, MAX_ITER);
 
   // instead of creating a single array that accomodates all 3 initial curves,
@@ -207,36 +204,37 @@ int main(){
   calculate_koch_curve(line2_array, line2_start_point, line2_end_point);
   calculate_koch_curve(line3_array, line3_start_point, line3_end_point);
 
+  SDL_Event event;
   if (init_sdl_and_window()){
-    while(main_window->_gwindow_open) {
-      while(SDL_PollEvent(&main_window->event) != 0) {
-        if(main_window->event.type == SDL_QUIT )  {
-          main_window->_gwindow_open = false;
+    while(main_window._gwindow_open) {
+      while(SDL_PollEvent(&event) != 0) {
+        if(event.type == SDL_QUIT )  {
+          main_window._gwindow_open = false;
         }
       }
 
       // change background color from here
-      SDL_SetRenderDrawColor(main_window->_grenderer, 255, 255, 
+      SDL_SetRenderDrawColor(main_window._grenderer, 255, 255, 
           255, 255);
-      SDL_RenderClear(main_window->_grenderer);
+      SDL_RenderClear(main_window._grenderer);
 
       // change koch curve color from here
-      SDL_SetRenderDrawColor(main_window->_grenderer, 0, 0, 
+      SDL_SetRenderDrawColor(main_window._grenderer, 0, 0, 
           0, 255);
 
       for (int i = 0; i < pow(4, MAX_ITER); i++){
-        SDL_RenderDrawLine(main_window->_grenderer, 
+        SDL_RenderDrawLine(main_window._grenderer, 
             line1_array[i].start.x, line1_array[i].start.y,
             line1_array[i].end.x, line1_array[i].end.y);
-        SDL_RenderDrawLine(main_window->_grenderer, 
+        SDL_RenderDrawLine(main_window._grenderer, 
             line2_array[i].start.x, line2_array[i].start.y,
             line2_array[i].end.x, line2_array[i].end.y);
-        SDL_RenderDrawLine(main_window->_grenderer, 
+        SDL_RenderDrawLine(main_window._grenderer, 
             line3_array[i].start.x, line3_array[i].start.y,
             line3_array[i].end.x, line3_array[i].end.y);
       }
 
-      SDL_RenderPresent(main_window->_grenderer);
+      SDL_RenderPresent(main_window._grenderer);
     }
   }
   clean_up_and_close();
