@@ -12,6 +12,11 @@
 
 #define ARRAY_COUNT(A) (sizeof(A)/sizeof((A)[0]))
 
+#define MINIMUM(A, B)			(((A) < (B)) ? (A) : (B))
+#define MAXIMUM(A, B)			(((A) > (B)) ? (A) : (B))
+#define CLAMP(A, B, V)      MINIMUM(B, MAXIMUM(A, V))
+#define CLAMP01(V)				CLAMP(0.0F, 1.0F, V)
+
 typedef struct {
 	float x, y;
 } V2;
@@ -131,16 +136,29 @@ void render_rect(V2 pos, V2 dim, V4 color) {
 	glVertex2f(pos.x + dim.x, pos.y);
 }
 
-float render_font(Font *font, V2 pos, V4 color, const char *text) {	
+float render_font(Font *font, V2 pos, V4 color, const char *text, size_t len) {
+	stbtt_aligned_quad q;
 	glColor4f(color.x, color.y, color.z, color.w);
-	while (*text) {
+	const char *last = text + len;
+	while (text != last) {
 		if (*text >= 32 && *text < 126) {
-			stbtt_aligned_quad q;
 			ex_stbtt_GetPackedQuad(font->cdata, font->width, font->height, *text - 32, &pos.x, &pos.y, &q, 1);
 			glTexCoord2f(q.s0, q.t1); glVertex2f(q.x0, q.y0);
 			glTexCoord2f(q.s1, q.t1); glVertex2f(q.x1, q.y0);
 			glTexCoord2f(q.s1, q.t0); glVertex2f(q.x1, q.y1);
 			glTexCoord2f(q.s0, q.t0); glVertex2f(q.x0, q.y1);
+		}
+		++text;
+	}
+	return pos.x;
+}
+
+float render_font_stub(Font *font, V2 pos, const char *text, size_t len) {
+	stbtt_aligned_quad q;
+	const char *last = text + len;
+	while (text != last) {
+		if (*text >= 32 && *text < 126) {
+			ex_stbtt_GetPackedQuad(font->cdata, font->width, font->height, *text - 32, &pos.x, &pos.y, &q, 1);
 		}
 		++text;
 	}
@@ -159,9 +177,10 @@ typedef struct {
 
 typedef struct {
 	float offset;
+	float text_offset;
 	Font font;
 	char text[255];
-	int cursor;
+	size_t cursor;
 	bool hovered;
 
 	float cursor_blink_t;
@@ -202,6 +221,7 @@ bool panel_create(Panel *panel, const char *font, float font_size, const float o
 	}
 
 	panel->input.offset = offset;
+	panel->input.text_offset = 0;
 
 	panel->background.p = v2(0, 0);
 	panel->background.d = v2(0, font_size + 20);
@@ -275,15 +295,32 @@ void panel_on_key_input(GLFWwindow *window, int key, int scancode, int action, i
 
 	switch (panel->state) {
 		case PANEL_STATE_TYPING: {
-			if (key == GLFW_KEY_BACKSPACE && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
-				int len = (int)strlen(panel->input.text);
-				if (len > 0) {
-					panel->input.text[len - 1] = 0;
-					panel->input.cursor -= 1;
-					panel->input.cursor_blink_t = 0;
-				}
-			} else if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+			if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
 				panel_stop_typing(panel);
+			} else if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+				switch (key) {
+					case GLFW_KEY_BACKSPACE: {
+						panel->input.cursor_blink_t = 0;
+						int len = (int)strlen(panel->input.text);
+						if (len > 0) {
+							panel->input.text[len - 1] = 0;
+							panel->input.cursor -= 1;
+						}
+					} break;
+
+					case GLFW_KEY_RIGHT: {
+						panel->input.cursor_blink_t = 0;
+						int len = (int)strlen(panel->input.text);
+						if (panel->input.cursor < len)
+							panel->input.cursor += 1;
+					} break;
+
+					case GLFW_KEY_LEFT: {
+						panel->input.cursor_blink_t = 0;
+						if (panel->input.cursor > 0)
+							panel->input.cursor -= 1;
+					} break;
+				}
 			}
 		} break;
 
@@ -323,6 +360,10 @@ void panel_render(Panel *panel) {
 	float mid_y = (panel->background.d.y - panel->input.font.size) * 0.5f + panel->background.p.y;
 	float off_x = panel->input.offset - 1;
 
+	glLoadIdentity();
+	glOrtho(0, context.framebuffer_w, 0, context.framebuffer_h, -1, 1);
+	glViewport(0, 0, context.framebuffer_w, context.framebuffer_h);
+
 	glBegin(GL_QUADS);
 	render_rect(panel->background.p, panel->background.d, panel->background.color[0]);
 	if (off_x > 0) {
@@ -330,9 +371,7 @@ void panel_render(Panel *panel) {
 	}
 	glEnd();
 
-	glEnable(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, panel->input.font.texture);
-	glBegin(GL_QUADS);
+	glPopMatrix();
 
 	const char *text = "Enter Command...";
 	if (panel->state == PANEL_STATE_TYPING) {
@@ -341,23 +380,48 @@ void panel_render(Panel *panel) {
 		text = panel->input.text;
 	}
 
+	float cursor_height = panel->background.d.y * 0.8f;
+	float cursor_width = 2; // 0.6f * panel->input.font.size;
+
 	V4 color = v4(.5f, .5f, .5f, 1.f);
-	float x = render_font(&panel->input.font, v2(panel->input.offset, mid_y), color, text);
+
+	V2 text_pos = v2(panel->input.offset - panel->input.text_offset, mid_y);
+	float cursor_render_x = render_font_stub(&panel->input.font, text_pos, text, panel->input.cursor);
+
+	if (cursor_render_x < panel->input.offset) {
+		panel->input.text_offset -= (panel->input.offset - cursor_render_x);
+		text_pos = v2(panel->input.offset - panel->input.text_offset, mid_y);
+		cursor_render_x = render_font_stub(&panel->input.font, text_pos, text, panel->input.cursor);
+	} else if (cursor_render_x > (context.framebuffer_w - cursor_width - panel->input.font.size)) {
+		panel->input.text_offset += (cursor_render_x - context.framebuffer_w + cursor_width + panel->input.font.size);
+		text_pos = v2(panel->input.offset - panel->input.text_offset, mid_y);
+		cursor_render_x = render_font_stub(&panel->input.font, text_pos, text, panel->input.cursor);
+	}
+
+	glLoadIdentity();
+	glOrtho(panel->input.offset, context.framebuffer_w, 0, panel->background.d.y, -1, 1);
+	glViewport((GLint)panel->input.offset, 0, context.framebuffer_w, (GLsizei)panel->background.d.y);
+
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, panel->input.font.texture);
+	glBegin(GL_QUADS);
+
+	render_font(&panel->input.font, text_pos, color, text, strlen(text));
 
 	glEnd();
 	glDisable(GL_TEXTURE_2D);
+
+	glPopMatrix();
 
 	if (panel->state == PANEL_STATE_TYPING) {
 		float t = panel->input.cursor_blink_t;
 		if (t > 1) t = 1;
 		V4 cursor_color = v4lerp(panel->input.cursor_colors[0], panel->input.cursor_colors[1], t);
 
-		float cursor_height = panel->background.d.y * 0.8f;
-		float cursor_width = 0.6f * panel->input.font.size;
 		mid_y = (panel->background.d.y - cursor_height) * 0.5f + panel->background.p.y;
 
 		glBegin(GL_QUADS);
-		render_rect(v2(x, mid_y), v2(cursor_width, cursor_height), cursor_color);
+		render_rect(v2(cursor_render_x, mid_y), v2(cursor_width, cursor_height), cursor_color);
 		glEnd();
 	}
 }
@@ -425,16 +489,10 @@ int main(int argc, char *argv[]) {
 
 		panel_update(&panel, dt);
 
-		glViewport(0, 0, context.framebuffer_w, context.framebuffer_h);
 		glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		glLoadIdentity();
-		glOrtho(0, context.framebuffer_w, 0, context.framebuffer_h, -1, 1);
-
 		panel_render(&panel);
-
-		glPopMatrix();
 
 		glfwSwapBuffers(context.window);
 
