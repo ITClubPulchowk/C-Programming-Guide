@@ -1,3 +1,14 @@
+/*
+* File Navigation
+* 
+* [Helper Macros]
+* [Utility Structs & Functions]
+* [Context]
+* [Font]
+* [Rendering]
+* [Panel]
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -8,7 +19,13 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 
+#if defined(_MSC_VER)
 #pragma comment(lib, "Opengl32.lib")
+#endif
+
+//
+// Helper Macros
+//
 
 #define ARRAY_COUNT(A) (sizeof(A)/sizeof((A)[0]))
 
@@ -17,20 +34,21 @@
 #define CLAMP(A, B, V)      MINIMUM(B, MAXIMUM(A, V))
 #define CLAMP01(V)				CLAMP(0.0F, 1.0F, V)
 
-typedef struct {
-	float x, y;
-} V2;
-typedef struct {
-	float x, y, z, w;
-} V4;
+//
+// Utility Structs & Functions
+//
 
 float lerp(float a, float b, float t) { return (1.0f - t) * a + t * b; }
+
+typedef struct { float x, y; } V2;
+typedef struct { float x, y, z, w; } V4;
 
 V2 v2(float x, float y) { return (V2) { x, y }; }
 V2 v2add(V2 a, V2 b) { return (V2) { a.x + b.x, a.y + b.y }; }
 V2 v2sub(V2 a, V2 b) { return (V2) { a.x - b.x, a.y - b.y }; }
 V2 v2mul(V2 a, float b) { return (V2) { a.x *b, a.y *b }; }
 float v2dot(V2 a, V2 b) { return a.x * b.x + a.y * b.y; }
+V2 v2lerp(V2 a, V2 b, float t) { return v2add(v2mul(a, 1.0f - t), v2mul(b, t)); }
 
 V4 v4(float x, float y, float z, float w) { return (V4) { x, y, z, w }; }
 V4 v4add(V4 a, V4 b) { return (V4) { a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w }; }
@@ -39,9 +57,30 @@ V4 v4mul(V4 a, float b) { return (V4) { a.x *b, a.y *b, a.z *b, a.w *b }; }
 float v4dot(V4 a, V4 b) { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
 V4 v4lerp(V4 a, V4 b, float t) { return v4add(v4mul(a, 1.0f - t), v4mul(b, t)); }
 
-bool point_inside_rect(V2 p, V2 ra, V2 rb) {
-	return (p.x > ra.x && p.x < rb.x) && (p.y > ra.y && p.y < rb.y);
+bool point_inside_rect(V2 p, V2 ra, V2 rb) { return (p.x > ra.x && p.x < rb.x) && (p.y > ra.y && p.y < rb.y); }
+
+char *read_entire_file(const char *file) {
+	FILE *f = fopen(file, "rb");
+	fseek(f, 0, SEEK_END);
+	long fsize = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	char *string = malloc(fsize + 1);
+	fread(string, 1, fsize, f);
+	fclose(f);
+
+	string[fsize] = 0;
+	return string;
 }
+
+typedef struct {
+	size_t length;
+	char *data;
+} String;
+
+//
+// Context
+//
 
 typedef enum {
 	CURSOR_KIND_ARROW,
@@ -59,468 +98,8 @@ typedef struct {
 
 static Context context;
 
-typedef struct {
-	GLuint texture;
-	int width, height;
-	float size;
-	stbtt_packedchar cdata[96];  // ASCII 32..126 is 95 glyphs
-} Font;
-
-char *read_entire_file(const char *file) {
-	FILE *f = fopen(file, "rb");
-	fseek(f, 0, SEEK_END);
-	long fsize = ftell(f);
-	fseek(f, 0, SEEK_SET);
-
-	char *string = malloc(fsize + 1);
-	fread(string, 1, fsize, f);
-	fclose(f);
-
-	string[fsize] = 0;
-	return string;
-}
-
-bool font_load(const char *file, float font_size, Font *font) {
-	char *data = read_entire_file(file);
-	if (!data) return false;
-
-	stbtt_fontinfo info;
-
-	int offset = stbtt_GetFontOffsetForIndex(data, 0);
-	if (!stbtt_InitFont(&info, data, offset)) {
-		free(data);
-		return false;
-	}
-
-	int width = 512;
-	int height = 512;
-	unsigned char *pixels = malloc(width * height);
-
-	stbtt_pack_context context;
-
-	stbtt_PackBegin(&context, pixels, width, height, 0, 1, NULL);
-	stbtt_PackSetOversampling(&context, 1, 1);
-	stbtt_PackFontRange(&context, data, 0, font_size, 32, ARRAY_COUNT(font->cdata), font->cdata);
-	stbtt_PackEnd(&context);
-
-	font->width = width;
-	font->height = height;
-	font->size = font_size;
-
-	glGenTextures(1, &font->texture);
-	glBindTexture(GL_TEXTURE_2D, font->texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, width, height, 0, GL_ALPHA, GL_UNSIGNED_BYTE, pixels);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-	free(pixels);
-	free(data);
-	return true;
-}
-
-STBTT_DEF void ex_stbtt_GetPackedQuad(const stbtt_packedchar *chardata, int pw, int ph, int char_index, float *xpos, float *ypos, stbtt_aligned_quad *q, int align_to_integer) {
-	float ipw = 1.0f / pw, iph = 1.0f / ph;
-	const stbtt_packedchar *b = chardata + char_index;
-
-	if (align_to_integer) {
-		float x = (float)STBTT_ifloor((*xpos + b->xoff) + 0.5f);
-		float y = (float)STBTT_ifloor((*ypos - b->yoff2) + 0.5f);
-		q->x0 = x;
-		q->y0 = y;
-		q->x1 = x + b->xoff2 - b->xoff;
-		q->y1 = y + b->yoff2 - b->yoff;
-	} else {
-		q->x0 = *xpos + b->xoff;
-		q->y0 = *ypos - b->yoff2;
-		q->x1 = *xpos + b->xoff2;
-		q->y1 = *ypos - b->yoff;
-	}
-
-	q->s0 = b->x0 * ipw;
-	q->t0 = b->y0 * iph;
-	q->s1 = b->x1 * ipw;
-	q->t1 = b->y1 * iph;
-
-	*xpos += b->xadvance;
-}
-
-void render_rect(V2 pos, V2 dim, V4 color) {
-	glColor4f(color.x, color.y, color.z, color.w);
-	glVertex2f(pos.x, pos.y);
-	glVertex2f(pos.x, pos.y + dim.y);
-	glVertex2f(pos.x + dim.x, pos.y + dim.y);
-	glVertex2f(pos.x + dim.x, pos.y);
-}
-
-size_t find_cursor_position(Font *font, V2 pos, float c, const char *text, size_t len) {
-	stbtt_aligned_quad q;
-	const char *first = text;
-	const char *last = text + len;
-
-	while (text != last) {
-		if (*text >= 32 && *text < 126) {
-			float prev_x = pos.x;
-			ex_stbtt_GetPackedQuad(font->cdata, font->width, font->height, *text - 32, &pos.x, &pos.y, &q, 1);
-			if (c >= prev_x && c <= pos.x) {
-				if (c - prev_x < pos.x - c) {
-					return text - first;
-				} else {
-					return text - first + 1;
-				}
-			}
-		}
-		++text;
-	}
-
-	return len;
-}
-
-float render_font(Font *font, V2 pos, V4 color, const char *text, size_t len) {
-	stbtt_aligned_quad q;
-	glColor4f(color.x, color.y, color.z, color.w);
-	const char *last = text + len;
-	while (text != last) {
-		if (*text >= 32 && *text < 126) {
-			ex_stbtt_GetPackedQuad(font->cdata, font->width, font->height, *text - 32, &pos.x, &pos.y, &q, 1);
-			glTexCoord2f(q.s0, q.t1); glVertex2f(q.x0, q.y0);
-			glTexCoord2f(q.s1, q.t1); glVertex2f(q.x1, q.y0);
-			glTexCoord2f(q.s1, q.t0); glVertex2f(q.x1, q.y1);
-			glTexCoord2f(q.s0, q.t0); glVertex2f(q.x0, q.y1);
-		}
-		++text;
-	}
-	return pos.x;
-}
-
-float render_font_stub(Font *font, V2 pos, const char *text, size_t len) {
-	stbtt_aligned_quad q;
-	const char *last = text + len;
-	while (text != last) {
-		if (*text >= 32 && *text < 126) {
-			ex_stbtt_GetPackedQuad(font->cdata, font->width, font->height, *text - 32, &pos.x, &pos.y, &q, 1);
-		}
-		++text;
-	}
-	return pos.x;
-}
-
 void glfw_error(int error, const char *description) {
 	fprintf(stderr, "Error(%d): %s\n", error, description);
-}
-
-typedef struct {
-	V2 p;
-	V2 d;
-	V4 color[2];
-} Panel_Background;
-
-typedef struct {
-	size_t len;
-	char buffer[255];
-} String_Buffer;
-
-size_t string_length(String_Buffer *buf) {
-	return buf->len;
-}
-
-char *string_data(String_Buffer *buf) {
-	return buf->buffer;
-}
-
-void string_set(String_Buffer *buf, const char *str) {
-	buf->len = MINIMUM(sizeof(buf->buffer), strlen(str));
-	strncpy(buf->buffer, str, buf->len);
-}
-
-bool string_remove(String_Buffer *buf, size_t index) {
-	if (index < buf->len && buf->len) {
-		memmove(buf->buffer + index, buf->buffer + index + 1, (buf->len - index - 1));
-		buf->len -= 1;
-		return true;
-	}
-	return false;
-}
-
-bool string_insert(String_Buffer *buf, size_t index, char c) {
-	if (index <= buf->len && buf->len + 1 <= sizeof(buf->buffer)) {
-		memmove(buf->buffer + index + 1, buf->buffer + index, (buf->len - index));
-		buf->buffer[index] = c;
-		buf->len += 1;
-		return true;
-	}
-	return false;
-}
-
-typedef struct {
-	float offset;
-	float text_offset;
-
-	Font font;
-	String_Buffer text;
-	size_t cursor;
-
-	bool hovered;
-
-	float cursor_p;
-	float cursor_p_target;
-	float cursor_w;
-
-	float cursor_blink_t;
-	V4 cursor_colors[2];
-} Panel_Text_Input;
-
-typedef enum {
-	PANEL_STATE_IDEL,
-	PANEL_STATE_TYPING,
-} Panel_State;
-
-typedef struct {
-	Panel_State state;
-	Panel_Text_Input input;
-	Panel_Background background;
-} Panel;
-
-bool panel_create(Panel *panel, const char *font, float font_size, const float offset) {
-	if (!font_load(font, font_size, &panel->input.font)) {
-		fprintf(stderr, "Failed to load font: %s\n", font);
-		return false;
-	}
-
-	panel->input.offset = offset;
-	panel->input.text_offset = 0;
-
-	panel->background.p = v2(0, 0);
-	panel->background.d = v2(0, font_size + 20);
-	panel->background.color[0] = v4(0.04f, 0.04f, 0.04f, 1.0f);
-	panel->background.color[1] = v4(0.2f, 0.6f, 0.6f, 1.0f);
-
-	panel->state = PANEL_STATE_IDEL;
-
-	memset(&panel->input.text, 0, sizeof(panel->input.text));
-	panel->input.cursor = 0;
-	panel->input.hovered = false;
-
-	panel->input.cursor_p = offset;
-	panel->input.cursor_p_target = offset;
-	panel->input.cursor_w = 2;
-
-	panel->input.cursor_colors[0] = v4(.2f, .8f, .2f, 1.f);
-	panel->input.cursor_colors[1] = v4(1.f, 1.f, 1.f, 1.f);
-	panel->input.cursor_blink_t = 0;
-
-	return true;
-}
-
-void panel_start_typing(Panel *panel) {
-	panel->state = PANEL_STATE_TYPING;
-	panel->input.cursor_blink_t = 0;
-}
-
-void panel_stop_typing(Panel *panel) {
-	panel->state = PANEL_STATE_IDEL;
-}
-
-void panel_on_cursor_pos_changed(GLFWwindow *window, double x, double y) {
-	Panel *panel = glfwGetWindowUserPointer(window);
-
-	y = (double)context.window_h - y;
-	V2 cursor = v2((float)x, (float)y);
-
-	V2 rect_min = panel->background.p;
-	rect_min.x += panel->input.offset;
-	V2 rect_max = v2add(rect_min, v2((float)context.framebuffer_w, panel->background.d.y));
-
-	bool previous_hovered = panel->input.hovered;
-	panel->input.hovered = point_inside_rect(cursor, rect_min, rect_max);
-
-	if (panel->input.hovered) {
-		if (!previous_hovered) {
-			glfwSetCursor(context.window, context.cursors[CURSOR_KIND_IBEAM]);
-		}
-	} else {
-		glfwSetCursor(context.window, context.cursors[CURSOR_KIND_ARROW]);
-	}
-}
-
-void panel_on_mouse_input(GLFWwindow *window, int button, int action, int mods) {
-	Panel *panel = glfwGetWindowUserPointer(window);
-
-	switch (panel->state) {
-		case PANEL_STATE_IDEL: {
-			if (panel->input.hovered && button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-				panel_start_typing(panel);
-
-				double xpos, ypos;
-				glfwGetCursorPos(window, &xpos, &ypos);
-
-				V2 pos = v2(panel->input.offset - panel->input.text_offset, 0);
-				panel->input.cursor = find_cursor_position(&panel->input.font, pos, (float)xpos, string_data(&panel->input.text), string_length(&panel->input.text));
-			}
-		} break;
-
-		case PANEL_STATE_TYPING: {
-			if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-				if (panel->input.hovered) {
-					double xpos, ypos;
-					glfwGetCursorPos(window, &xpos, &ypos);
-
-					V2 pos = v2(panel->input.offset - panel->input.text_offset, 0);
-					panel->input.cursor = find_cursor_position(&panel->input.font, pos, (float)xpos, string_data(&panel->input.text), string_length(&panel->input.text));
-				} else {
-					panel_stop_typing(panel);
-				}
-			}
-		} break;
-	}
-}
-
-void panel_on_key_input(GLFWwindow *window, int key, int scancode, int action, int mods) {
-	Panel *panel = glfwGetWindowUserPointer(window);
-
-	switch (panel->state) {
-		case PANEL_STATE_TYPING: {
-			if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-				panel_stop_typing(panel);
-			} else if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-				switch (key) {
-					case GLFW_KEY_BACKSPACE: {
-						panel->input.cursor_blink_t = 0;
-						if (panel->input.cursor && string_remove(&panel->input.text, panel->input.cursor - 1))
-							panel->input.cursor -= 1;
-					} break;
-
-					case GLFW_KEY_DELETE: {
-						panel->input.cursor_blink_t = 0;
-						string_remove(&panel->input.text, panel->input.cursor);
-					} break;
-
-					case GLFW_KEY_RIGHT: {
-						panel->input.cursor_blink_t = 0;
-						if (panel->input.cursor < string_length(&panel->input.text))
-							panel->input.cursor += 1;
-					} break;
-
-					case GLFW_KEY_LEFT: {
-						panel->input.cursor_blink_t = 0;
-						if (panel->input.cursor > 0)
-							panel->input.cursor -= 1;
-					} break;
-
-					case GLFW_KEY_HOME: {
-						panel->input.cursor_blink_t = 0;
-						panel->input.cursor = 0;
-					} break;
-
-					case GLFW_KEY_END: {
-						panel->input.cursor_blink_t = 0;
-						panel->input.cursor = string_length(&panel->input.text);
-					} break;
-				}
-			}
-		} break;
-
-		case PANEL_STATE_IDEL: {
-			if (key == GLFW_KEY_ENTER && action == GLFW_PRESS) {
-				panel_start_typing(panel);
-			}
-		} break;
-	}
-}
-
-void panel_on_text_input(GLFWwindow *window, unsigned int codepoint) {
-	Panel *panel = glfwGetWindowUserPointer(window);
-
-	switch (panel->state) {
-		case PANEL_STATE_TYPING: {
-			if (codepoint >= 32 && codepoint < 126) {
-				if (string_insert(&panel->input.text, panel->input.cursor, (char)codepoint))
-					panel->input.cursor += 1;
-			}
-		} break;
-	}
-}
-
-void panel_update(Panel *panel, float dt) {
-	panel->background.d.x = (float)context.framebuffer_w;
-
-	panel->input.cursor_blink_t += dt * 1.5f;
-	if (panel->input.cursor_blink_t > 1.5f) panel->input.cursor_blink_t = 0;
-
-	float cursor_target_w = ((string_length(&panel->input.text) != panel->input.cursor) ? 2 : (0.6f * panel->input.font.size));
-	panel->input.cursor_w = lerp(panel->input.cursor_w, cursor_target_w, 1.0f - powf(0.00000001f, dt));
-	panel->input.cursor_p = lerp(panel->input.cursor_p, panel->input.cursor_p_target, (float)(1.0 - pow(0.000000000000000001f, (double)dt)));
-}
-
-void panel_render(Panel *panel) {
-	float mid_y = (panel->background.d.y - panel->input.font.size) * 0.5f + panel->background.p.y;
-	float off_x = panel->input.offset - 1;
-
-	glViewport(0, 0, context.framebuffer_w, context.framebuffer_h);
-
-	glLoadIdentity();
-	glOrtho(0, context.framebuffer_w, 0, context.framebuffer_h, -1, 1);
-
-	glBegin(GL_QUADS);
-	render_rect(panel->background.p, panel->background.d, panel->background.color[0]);
-	if (off_x > 0) {
-		render_rect(panel->background.p, v2(off_x - 1, panel->background.d.y), panel->background.color[1]);
-	}
-	glEnd();
-
-	V4 color = v4(.6f, .2f, .2f, 1.f);
-
-	float cursor_height = panel->background.d.y * 0.7f;
-	float cursor_width = panel->input.cursor_w;
-
-	char *text = string_data(&panel->input.text);
-	size_t text_len = string_length(&panel->input.text);
-
-	V2 text_pos = v2(panel->input.offset - panel->input.text_offset, mid_y);
-	float cursor_render_x = render_font_stub(&panel->input.font, text_pos, text, panel->input.cursor);
-
-	if (cursor_render_x < panel->input.offset) {
-		panel->input.text_offset -= (panel->input.offset - cursor_render_x);
-		text_pos = v2(panel->input.offset - panel->input.text_offset, mid_y);
-		cursor_render_x = render_font_stub(&panel->input.font, text_pos, text, panel->input.cursor);
-	} else if (cursor_render_x > (context.framebuffer_w - cursor_width - panel->input.font.size)) {
-		panel->input.text_offset += (cursor_render_x - context.framebuffer_w + cursor_width + panel->input.font.size);
-		text_pos = v2(panel->input.offset - panel->input.text_offset, mid_y);
-		cursor_render_x = render_font_stub(&panel->input.font, text_pos, text, panel->input.cursor);
-	}
-
-	glEnable(GL_SCISSOR_TEST);
-	glScissor((GLint)panel->input.offset, 0, context.framebuffer_w, (GLsizei)panel->background.d.y);
-
-	glEnable(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, panel->input.font.texture);
-	glBegin(GL_QUADS);
-
-	if (panel->state == PANEL_STATE_TYPING || string_length(&panel->input.text) != 0) {
-		render_font(&panel->input.font, text_pos, color, text, text_len);
-	} else {
-		const char *msg = "Enter Code...";
-		render_font(&panel->input.font, v2(panel->input.offset, mid_y), v4(.5f, .5f, .5f, 1.f), msg, strlen(msg));
-	}
-
-	glEnd();
-	glDisable(GL_TEXTURE_2D);
-
-	if (panel->state == PANEL_STATE_TYPING) {
-		float t = panel->input.cursor_blink_t;
-		if (t > 1) t = 1;
-		V4 cursor_color = v4lerp(panel->input.cursor_colors[0], panel->input.cursor_colors[1], t);
-
-		mid_y = (panel->background.d.y - cursor_height) * 0.5f + panel->background.p.y;
-		panel->input.cursor_p_target = cursor_render_x;
-
-		glBegin(GL_QUADS);
-		render_rect(v2(panel->input.cursor_p, mid_y), v2(cursor_width, cursor_height), cursor_color);
-		glEnd();
-	}
-
-	glDisable(GL_SCISSOR_TEST);
-
-	glPopMatrix();
 }
 
 bool context_create() {
@@ -552,13 +131,484 @@ void context_destory() {
 	glfwTerminate();
 }
 
+//
+// Font
+//
+
+typedef struct {
+	GLuint id;
+	int width, height;
+} Texture;
+
+// ASCII 32..126 is 95 glyphs
+#define FONT_PACKED_MIN_CODEPOINT 32
+#define FONT_PACKED_MAX_CODEPOINT 126
+#define FONT_PACKED_CODEPOINT_COUNT (FONT_PACKED_MAX_CODEPOINT - FONT_PACKED_MIN_CODEPOINT + 1)
+
+typedef struct {
+	Texture texture;
+	float size;
+	stbtt_packedchar cdata[FONT_PACKED_CODEPOINT_COUNT];
+} Font;
+
+void stbttEx_GetPackedQuad(const stbtt_packedchar *chardata, int pw, int ph, int char_index, float *xpos, float *ypos, stbtt_aligned_quad *q) {
+	float ipw = 1.0f / pw, iph = 1.0f / ph;
+	const stbtt_packedchar *b = chardata + char_index;
+
+	float x = (float)STBTT_ifloor((*xpos + b->xoff) + 0.5f);
+	float y = (float)STBTT_ifloor((*ypos - b->yoff2) + 0.5f);
+	q->x0 = x;
+	q->y0 = y;
+	q->x1 = x + b->xoff2 - b->xoff;
+	q->y1 = y + b->yoff2 - b->yoff;
+
+	q->s0 = b->x0 * ipw;
+	q->t0 = b->y0 * iph;
+	q->s1 = b->x1 * ipw;
+	q->t1 = b->y1 * iph;
+
+	*xpos += b->xadvance;
+}
+
+size_t stbttEx_FindCursorOffset(Font *font, V2 pos, float c, const char *text, size_t len) {
+	stbtt_aligned_quad q;
+	const char *first = text;
+	const char *last = text + len;
+
+	while (text != last) {
+		if (*text >= 32 && *text < 126) {
+			float prev_x = pos.x;
+			stbttEx_GetPackedQuad(font->cdata, font->texture.width, font->texture.height, *text - 32, &pos.x, &pos.y, &q);
+			if (c >= prev_x && c <= pos.x) {
+				if (c - prev_x < pos.x - c) {
+					return text - first;
+				} else {
+					return text - first + 1;
+				}
+			}
+		}
+		++text;
+	}
+
+	return len;
+}
+
+bool font_load(const char *file, float font_size, int bitmap_w, int bitmap_h, Font *font) {
+	char *data = read_entire_file(file);
+	if (!data) return false;
+
+	stbtt_fontinfo info;
+
+	int offset = stbtt_GetFontOffsetForIndex(data, 0);
+	if (!stbtt_InitFont(&info, data, offset)) {
+		free(data);
+		return false;
+	}
+
+	unsigned char *pixels = malloc(bitmap_w * bitmap_h);
+
+	stbtt_pack_context context;
+
+	stbtt_PackBegin(&context, pixels, bitmap_w, bitmap_h, 0, 1, NULL);
+	stbtt_PackSetOversampling(&context, 1, 1);
+	stbtt_PackFontRange(&context, data, 0, font_size, FONT_PACKED_MIN_CODEPOINT, FONT_PACKED_CODEPOINT_COUNT, font->cdata);
+	stbtt_PackEnd(&context);
+
+	font->texture.width = bitmap_w;
+	font->texture.height = bitmap_h;
+	font->size = font_size;
+
+	glGenTextures(1, &font->texture.id);
+	glBindTexture(GL_TEXTURE_2D, font->texture.id);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, bitmap_w, bitmap_h, 0, GL_ALPHA, GL_UNSIGNED_BYTE, pixels);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	free(pixels);
+	free(data);
+	return true;
+}
+
+//
+// Rendering
+//
+
+void render_rect(V2 pos, V2 dim, V4 color) {
+	glColor4f(color.x, color.y, color.z, color.w);
+	glVertex2f(pos.x, pos.y);
+	glVertex2f(pos.x, pos.y + dim.y);
+	glVertex2f(pos.x + dim.x, pos.y + dim.y);
+	glVertex2f(pos.x + dim.x, pos.y);
+}
+
+float render_font(Font *font, V2 pos, V4 color, const char *text, size_t len) {
+	stbtt_aligned_quad q;
+	glColor4f(color.x, color.y, color.z, color.w);
+	const char *last = text + len;
+	while (text != last) {
+		if (*text >= 32 && *text < 126) {
+			stbttEx_GetPackedQuad(font->cdata, font->texture.width, font->texture.height, *text - 32, &pos.x, &pos.y, &q);
+			glTexCoord2f(q.s0, q.t1); glVertex2f(q.x0, q.y0);
+			glTexCoord2f(q.s1, q.t1); glVertex2f(q.x1, q.y0);
+			glTexCoord2f(q.s1, q.t0); glVertex2f(q.x1, q.y1);
+			glTexCoord2f(q.s0, q.t0); glVertex2f(q.x0, q.y1);
+		}
+		++text;
+	}
+	return pos.x;
+}
+
+float render_font_stub(Font *font, V2 pos, const char *text, size_t len) {
+	stbtt_aligned_quad q;
+	const char *last = text + len;
+	while (text != last) {
+		if (*text >= 32 && *text < 126) {
+			stbttEx_GetPackedQuad(font->cdata, font->texture.width, font->texture.height, *text - 32, &pos.x, &pos.y, &q);
+		}
+		++text;
+	}
+	return pos.x;
+}
+
+//
+// Panel
+//
+
+typedef enum {
+	PANEL_COLOR_BACKGROUND,
+	PANEL_COLOR_INPUT_INDICATOR,
+
+	PANEL_COLOR_CURSOR0,
+	PANEL_COLOR_CURSOR1,
+
+	PANEL_COLOR_TEXT_INPUT_PLACEHOLDER,
+	PANEL_COLOR_CODE,
+	
+	_PANEL_COLOR_COUNT,
+} Panel_Color;
+
+typedef struct {
+	Font font;
+	float height;
+	float indicator_size;
+	float cursor_blink_time;
+	float cursor_blink_rate;
+	double cursor_dposition;
+	double cursor_dsize;
+	V2 cursor_size[2];
+	V4 colors[_PANEL_COLOR_COUNT];
+} Panel_Style;
+
+#define PANEL_TEXT_INPUT_BUFFER_SIZE 255
+
+typedef struct {
+	char buffer[PANEL_TEXT_INPUT_BUFFER_SIZE];
+	size_t count;
+	size_t cursor;
+} Panel_Text_Input;
+
+typedef enum {
+	PANEL_STATE_IDEL,
+	PANEL_STATE_TYPING,
+} Panel_State;
+
+typedef struct {
+	Panel_Style style;
+	Panel_Text_Input text_input;
+
+	Panel_State state;
+	float text_position_x_offset;
+	float cursor_t;
+	float cursor_position;
+	float cursor_position_target;
+	V2 cursor_size;
+	bool hovering;
+} Panel;
+
+typedef bool(*Panel_Styler)(Panel_Style *style);
+
+bool panel_default_styler(Panel_Style *style) {
+	const char *font_file = "Stanberry.ttf";
+	const float font_size = 24;
+	const int font_bitmap_w = 512;
+	const int font_bitmap_h = 512;
+
+	if (!font_load(font_file, font_size, font_bitmap_w, font_bitmap_h, &style->font)) {
+		fprintf(stderr, "Failed to load font: %s\n", font_file);
+		return false;
+	}
+
+	style->height = font_size + 20;
+	style->indicator_size = 20;
+	style->cursor_blink_rate = 1.5f;
+	style->cursor_blink_time = 1.5f;
+	style->cursor_dposition = 0.000000000000000001;
+	style->cursor_dsize = 0.00000001;
+	style->cursor_size[0] = v2(2.0f, 0.7f * style->height);
+	style->cursor_size[1] = v2(0.5f * font_size, 0.7f * style->height);
+
+	style->colors[PANEL_COLOR_BACKGROUND] = v4(0.04f, 0.04f, 0.04f, 1.0f);
+	style->colors[PANEL_COLOR_INPUT_INDICATOR] = v4(0.2f, 0.6f, 0.6f, 1.0f);
+	style->colors[PANEL_COLOR_CURSOR0] = v4(0.2f, 0.8f, 0.2f, 1.f);
+	style->colors[PANEL_COLOR_CURSOR1] = v4(0.2f, 0.6f, 0.6f, 1.0f);
+	style->colors[PANEL_COLOR_TEXT_INPUT_PLACEHOLDER] = v4(0.5, 0.5f, 0.5f, 1.0f);
+	style->colors[PANEL_COLOR_CODE] = v4(0.6f, 0.2f, 0.2f, 1.0f);
+
+	return true;
+}
+
+String panel_text(Panel *panel) {
+	String string;
+	string.length = panel->text_input.count;
+	string.data = panel->text_input.buffer;
+	return string;
+}
+
+void panel_input_character(Panel *panel, char c) {
+	size_t index = panel->text_input.cursor;
+	size_t count = panel->text_input.count;
+	if (index <= count && count + 1 <= PANEL_TEXT_INPUT_BUFFER_SIZE) {
+		memmove(panel->text_input.buffer + index + 1, panel->text_input.buffer + index, count - index);
+		panel->text_input.buffer[index] = c;
+		panel->text_input.count += 1;
+		panel->text_input.cursor += 1;
+	}
+	panel->cursor_t = 0;
+}
+
+void panel_delete_character(Panel *panel, bool backspace) {
+	size_t index = panel->text_input.cursor - (backspace != 0);
+	size_t count = panel->text_input.count;
+	if (index < count && count) {
+		memmove(panel->text_input.buffer + index, panel->text_input.buffer + index + 1, (count - index - 1));
+		panel->text_input.count -= 1;
+		panel->text_input.cursor -= (backspace != 0);
+	}
+	panel->cursor_t = 0;
+}
+
+void panel_set_cursor(Panel *panel, size_t cursor) {
+	if (cursor <= panel->text_input.count) {
+		panel->text_input.cursor = cursor;
+		panel->cursor_t = 0;
+	}
+}
+
+V2 panel_text_render_position(Panel *panel) {
+	float mid_y = (panel->style.height - panel->style.font.size) * 0.5f;
+	return v2(panel->style.indicator_size - panel->text_position_x_offset, mid_y);
+}
+
+void panel_set_cursor_at_position(Panel *panel, float xpos) {
+	V2 pos = panel_text_render_position(panel);
+	String text = panel_text(panel);
+	size_t cursor = stbttEx_FindCursorOffset(&panel->style.font, pos, xpos, text.data, text.length);
+	panel_set_cursor(panel, cursor);
+}
+
+void panel_start_typing(Panel *panel) {
+	panel->state = PANEL_STATE_TYPING;
+	panel->cursor_t = 0;
+}
+
+void panel_stop_typing(Panel *panel) {
+	panel->state = PANEL_STATE_IDEL;
+}
+
+void panel_on_cursor_pos_changed(GLFWwindow *window, double x, double y) {
+	Panel *panel = glfwGetWindowUserPointer(window);
+
+	y = (double)context.window_h - y;
+	V2 cursor = v2((float)x, (float)y);
+
+	V2 panel_rect_min = v2(panel->style.indicator_size, 0);
+	V2 panel_rect_max = v2((float)context.framebuffer_w, panel->style.height);
+
+	bool hovered = panel->hovering;
+	panel->hovering = point_inside_rect(cursor, panel_rect_min, panel_rect_max);
+
+	if (panel->hovering) {
+		if (!hovered)
+			glfwSetCursor(window, context.cursors[CURSOR_KIND_IBEAM]);
+	} else {
+		if (hovered)
+			glfwSetCursor(window, context.cursors[CURSOR_KIND_ARROW]);
+	}
+}
+
+void panel_on_mouse_input(GLFWwindow *window, int button, int action, int mods) {
+	Panel *panel = glfwGetWindowUserPointer(window);
+
+	switch (panel->state) {
+		case PANEL_STATE_IDEL: {
+			if (panel->hovering && button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+				panel_start_typing(panel);
+
+				double xpos, ypos;
+				glfwGetCursorPos(window, &xpos, &ypos);
+				panel_set_cursor_at_position(panel, (float)xpos);
+			}
+		} break;
+
+		case PANEL_STATE_TYPING: {
+			if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+				if (panel->hovering) {
+					double xpos, ypos;
+					glfwGetCursorPos(window, &xpos, &ypos);
+					panel_set_cursor_at_position(panel, (float)xpos);
+				} else {
+					panel_stop_typing(panel);
+				}
+			}
+		} break;
+	}
+}
+
+void panel_on_key_input(GLFWwindow *window, int key, int scancode, int action, int mods) {
+	Panel *panel = glfwGetWindowUserPointer(window);
+
+	switch (panel->state) {
+		case PANEL_STATE_TYPING: {
+			if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+				panel_stop_typing(panel);
+			} else if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+				switch (key) {
+					case GLFW_KEY_BACKSPACE: panel_delete_character(panel, true); break;
+					case GLFW_KEY_DELETE: panel_delete_character(panel, false); break;
+					case GLFW_KEY_RIGHT: panel_set_cursor(panel, panel->text_input.cursor + 1); break;
+					case GLFW_KEY_LEFT: panel_set_cursor(panel, panel->text_input.cursor ? panel->text_input.cursor - 1 : 0); break;
+					case GLFW_KEY_HOME: panel_set_cursor(panel, 0); break;
+					case GLFW_KEY_END: panel_set_cursor(panel, panel->text_input.count); break;
+				}
+			}
+		} break;
+
+		case PANEL_STATE_IDEL: {
+			if (key == GLFW_KEY_ENTER && action == GLFW_PRESS) {
+				panel_start_typing(panel);
+			}
+		} break;
+	}
+}
+
+void panel_on_text_input(GLFWwindow *window, unsigned int codepoint) {
+	Panel *panel = glfwGetWindowUserPointer(window);
+
+	switch (panel->state) {
+		case PANEL_STATE_TYPING: {
+			if (codepoint >= FONT_PACKED_MIN_CODEPOINT && codepoint < FONT_PACKED_MAX_CODEPOINT)
+				panel_input_character(panel, (char)codepoint);
+		} break;
+	}
+}
+
+bool panel_create(Panel_Styler styler, Panel *panel) {
+	if (styler == NULL)
+		styler = panel_default_styler;
+
+	if (!styler(&panel->style)) {
+		return false;
+	}
+
+	memset(&panel->text_input, 0, sizeof(panel->text_input));
+
+	panel->state = PANEL_STATE_IDEL;
+	panel->text_position_x_offset = false;
+	panel->cursor_t = 0;
+	panel->cursor_position = panel->style.indicator_size;
+	panel->cursor_position_target = panel->style.indicator_size;
+	panel->cursor_size = panel->style.cursor_size[1];
+	panel->hovering = false;
+
+	return true;
+}
+
+void panel_update(Panel *panel, float dt) {
+	panel->cursor_t += dt * panel->style.cursor_blink_rate;
+	if (panel->cursor_t > panel->style.cursor_blink_time) panel->cursor_t = 0;
+
+	panel->cursor_position = lerp(panel->cursor_position, panel->cursor_position_target, (float)(1.0 - pow(panel->style.cursor_dposition, (double)dt)));
+
+	V2 cursor_target_size = ((panel->text_input.count != panel->text_input.cursor) ? panel->style.cursor_size[0] : panel->style.cursor_size[1]);
+	panel->cursor_size = v2lerp(panel->cursor_size, cursor_target_size, (float)(1.0f - pow(panel->style.cursor_dsize, dt)));
+}
+
+void panel_render(Panel *panel) {
+	float off_x = panel->style.indicator_size - 1;
+
+	glViewport(0, 0, context.framebuffer_w, context.framebuffer_h);
+
+	glLoadIdentity();
+	glOrtho(0, context.framebuffer_w, 0, context.framebuffer_h, -1, 1);
+
+	glBegin(GL_QUADS);
+	render_rect(v2(0, 0), v2((float)context.framebuffer_w, panel->style.height), panel->style.colors[PANEL_COLOR_BACKGROUND]);
+	if (off_x > 0) {
+		render_rect(v2(0, 0), v2(off_x - 1, panel->style.height), panel->style.colors[PANEL_COLOR_INPUT_INDICATOR]);
+	}
+	glEnd();
+
+	String text = panel_text(panel);
+	size_t cursor = panel->text_input.cursor;
+
+	float cursor_w = panel->cursor_size.x;
+	float cursor_h = panel->cursor_size.y;
+
+	V2 text_pos = panel_text_render_position(panel);
+	float cursor_render_x = render_font_stub(&panel->style.font, text_pos, text.data, cursor);
+
+	if (cursor_render_x < panel->style.indicator_size) {
+		panel->text_position_x_offset -= (panel->style.indicator_size - cursor_render_x);
+		text_pos = panel_text_render_position(panel);
+		cursor_render_x = render_font_stub(&panel->style.font, text_pos, text.data, cursor);
+	} else if (cursor_render_x > (context.framebuffer_w - cursor_w - panel->style.font.size)) {
+		panel->text_position_x_offset += (cursor_render_x - context.framebuffer_w + cursor_w + panel->style.font.size);
+		text_pos = panel_text_render_position(panel);
+		cursor_render_x = render_font_stub(&panel->style.font, text_pos, text.data, cursor);
+	}
+
+	glEnable(GL_SCISSOR_TEST);
+	glScissor((GLint)panel->style.indicator_size, 0, context.framebuffer_w, (GLsizei)panel->style.height);
+
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, panel->style.font.texture.id);
+	glBegin(GL_QUADS);
+
+	if (panel->state == PANEL_STATE_TYPING || text.length != 0) {
+		render_font(&panel->style.font, text_pos, panel->style.colors[PANEL_COLOR_CODE], text.data, text.length);
+	} else {
+		const char msg[] = "Enter Code...";
+		render_font(&panel->style.font, v2(panel->style.indicator_size, text_pos.y), panel->style.colors[PANEL_COLOR_TEXT_INPUT_PLACEHOLDER], msg, sizeof(msg) - 1);
+	}
+
+	glEnd();
+	glDisable(GL_TEXTURE_2D);
+
+	if (panel->state == PANEL_STATE_TYPING) {
+		float t = panel->cursor_t;
+		if (t > 1) t = 1;
+		V4 cursor_color = v4lerp(panel->style.colors[PANEL_COLOR_CURSOR0], panel->style.colors[PANEL_COLOR_CURSOR1], t);
+
+		float mid_y = (panel->style.height - cursor_h) * 0.5f;
+		panel->cursor_position_target = cursor_render_x;
+
+		glBegin(GL_QUADS);
+		render_rect(v2(panel->cursor_position, mid_y), v2(cursor_w, cursor_h), cursor_color);
+		glEnd();
+	}
+
+	glDisable(GL_SCISSOR_TEST);
+
+	glPopMatrix();
+}
+
 int main(int argc, char *argv[]) {
 	if (!context_create()) {
 		return -1;
 	}
 
 	Panel panel;
-	if (!panel_create(&panel, "Stanberry.ttf", 32, 20)) {
+	if (!panel_create(NULL, &panel)) {
 		fprintf(stderr, "Panel failed to create!\n");
 		return -1;
 	}
