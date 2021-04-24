@@ -178,10 +178,16 @@ typedef struct {
 typedef struct {
 	float offset;
 	float text_offset;
+
 	Font font;
 	char text[255];
 	size_t cursor;
+
 	bool hovered;
+
+	float cursor_p;
+	float cursor_p_target;
+	float cursor_w;
 
 	float cursor_blink_t;
 	V4 cursor_colors[2];
@@ -233,6 +239,10 @@ bool panel_create(Panel *panel, const char *font, float font_size, const float o
 	memset(panel->input.text, 0, sizeof(panel->input.text));
 	panel->input.cursor = 0;
 	panel->input.hovered = false;
+
+	panel->input.cursor_p = offset;
+	panel->input.cursor_p_target = offset;
+	panel->input.cursor_w = 2;
 
 	panel->input.cursor_colors[0] = v4(.2f, .8f, .2f, 1.f);
 	panel->input.cursor_colors[1] = v4(1.f, 1.f, 1.f, 1.f);
@@ -320,6 +330,16 @@ void panel_on_key_input(GLFWwindow *window, int key, int scancode, int action, i
 						if (panel->input.cursor > 0)
 							panel->input.cursor -= 1;
 					} break;
+
+					case GLFW_KEY_HOME: {
+						panel->input.cursor_blink_t = 0;
+						panel->input.cursor = 0;
+					} break;
+
+					case GLFW_KEY_END: {
+						panel->input.cursor_blink_t = 0;
+						panel->input.cursor = strlen(panel->input.text);
+					} break;
 				}
 			}
 		} break;
@@ -354,6 +374,17 @@ void panel_update(Panel *panel, float dt) {
 
 	panel->input.cursor_blink_t += dt * 1.5f;
 	if (panel->input.cursor_blink_t > 1.5f) panel->input.cursor_blink_t = 0;
+
+	const char *text = "Enter Command...";
+	if (panel->state == PANEL_STATE_TYPING) {
+		text = panel->input.text;
+	} else if (panel->input.text[0] != 0) {
+		text = panel->input.text;
+	}
+
+	float cursor_target_w = ((strlen(text) != panel->input.cursor) ? 2 : (0.6f * panel->input.font.size));
+	panel->input.cursor_w = lerp(panel->input.cursor_w, cursor_target_w, 1.0f - powf(0.00000001f, dt));
+	panel->input.cursor_p = lerp(panel->input.cursor_p, panel->input.cursor_p_target, (float)(1.0 - pow(0.000000000000000001f, (double)dt)));
 }
 
 void panel_render(Panel *panel) {
@@ -380,9 +411,9 @@ void panel_render(Panel *panel) {
 		text = panel->input.text;
 	}
 
-	float cursor_height = panel->background.d.y * 0.8f;
-	float cursor_width = 2; // 0.6f * panel->input.font.size;
-
+	float cursor_height = panel->background.d.y * 0.7f;
+	float cursor_width = panel->input.cursor_w;
+	
 	V4 color = v4(.5f, .5f, .5f, 1.f);
 
 	V2 text_pos = v2(panel->input.offset - panel->input.text_offset, mid_y);
@@ -419,9 +450,10 @@ void panel_render(Panel *panel) {
 		V4 cursor_color = v4lerp(panel->input.cursor_colors[0], panel->input.cursor_colors[1], t);
 
 		mid_y = (panel->background.d.y - cursor_height) * 0.5f + panel->background.p.y;
+		panel->input.cursor_p_target = cursor_render_x;
 
 		glBegin(GL_QUADS);
-		render_rect(v2(cursor_render_x, mid_y), v2(cursor_width, cursor_height), cursor_color);
+		render_rect(v2(panel->input.cursor_p, mid_y), v2(cursor_width, cursor_height), cursor_color);
 		glEnd();
 	}
 }
