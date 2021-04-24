@@ -515,26 +515,7 @@ void panel_render(Panel *panel) {
 
 		glBegin(GL_QUADS);
 		render_rect(v2(panel->input.cursor_p, mid_y), v2(cursor_width, cursor_height), cursor_color);
-
-		//if (panel->input.hovered) {
-		//	double xpos, ypos;
-		//	glfwGetCursorPos(context.window, &xpos, &ypos);
-		//
-		//	V2 box;
-		//	V2 pos = v2(panel->input.offset - panel->input.text_offset, 0);
-		//	size_t cursor_i = find_cursor_position(&panel->input.font, pos, (float)xpos, string_data(&panel->input.text), string_length(&panel->input.text));
-		//	float cursor_p = render_font_stub(&panel->input.font, pos, string_data(&panel->input.text), cursor_i);
-		//
-		//	render_rect(v2(xpos, mid_y + 60), v2(2, cursor_height), v4(1, 1, 1, 1));
-		//	render_rect(v2(cursor_p, mid_y + 50), v2(2, cursor_height), v4(1, 1, 1, 1));
-		//
-		//	render_rect(v2(box.x, mid_y), v2(2, cursor_height), v4(1, 1, 0, 1));
-		//	render_rect(v2(box.y, mid_y), v2(2, cursor_height), v4(1, 1, 0, 1));
-		//}
-
 		glEnd();
-
-
 	}
 
 	glDisable(GL_SCISSOR_TEST);
