@@ -5,8 +5,10 @@
 * [Utility Structs & Functions]
 * [Context]
 * [Font]
+* [Mesh]
 * [Rendering]
 * [Panel]
+* [Actor]
 */
 
 #include <stdio.h>
@@ -536,8 +538,6 @@ void panel_update(Panel *panel, float dt) {
 void panel_render(Panel *panel) {
 	float off_x = panel->style.indicator_size - 1;
 
-	glViewport(0, 0, context.framebuffer_w, context.framebuffer_h);
-
 	glLoadIdentity();
 	glOrtho(0, context.framebuffer_w, 0, context.framebuffer_h, -1, 1);
 
@@ -602,6 +602,64 @@ void panel_render(Panel *panel) {
 	glPopMatrix();
 }
 
+//
+// Actor
+//
+
+typedef struct {
+	V2 position;
+	float rotation;
+	V2 scale;
+	V4 color;
+} Actor;
+
+void actor_render(Actor *actor) {
+	glPushMatrix();
+	glTranslatef(actor->position.x, actor->position.y, 0);
+	glRotatef(actor->rotation, 0, 0, -1);
+	glScalef(actor->scale.x, actor->scale.y, 1);
+
+	glColor4f(actor->color.x, actor->color.y, actor->color.z, actor->color.w);
+
+	glBegin(GL_TRIANGLES);
+	glVertex3f(-1, -1, 0);
+	glVertex3f(0, 1, 0);
+	glVertex3f(1, -1, 0);
+	glEnd();
+}
+
+//
+// Michi
+//
+
+typedef struct {
+	float size;
+	Actor actor;
+} Michi;
+
+void michi_create(float size, Michi *michi) {
+	michi->size = size;
+
+	michi->actor.position = v2(0, 0);
+	michi->actor.rotation = 0;
+	michi->actor.scale = v2(4, 4);
+	michi->actor.color = v4(0, 1, 1, 1);
+}
+
+void michi_render(Michi *michi) {
+	glLoadIdentity();
+
+	float aspect_ratio = (float)context.framebuffer_w / (float)context.framebuffer_h;
+	float half_height = michi->size;
+	float half_width = half_height * aspect_ratio;
+
+	glOrtho(-half_width, half_width, -half_height, half_height, -1, 1);
+
+	actor_render(&michi->actor);
+
+	glPopMatrix();
+}
+
 int main(int argc, char *argv[]) {
 	if (!context_create()) {
 		return -1;
@@ -612,6 +670,9 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Panel failed to create!\n");
 		return -1;
 	}
+
+	Michi michi;
+	michi_create(100, &michi);
 
 	glfwSetWindowUserPointer(context.window, &panel);
 	glfwSetCursorPosCallback(context.window, panel_on_cursor_pos_changed);
@@ -637,7 +698,11 @@ int main(int argc, char *argv[]) {
 		panel_update(&panel, dt);
 
 		glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT);
+		
+		glViewport(0, 0, context.framebuffer_w, context.framebuffer_h);
+
+		michi_render(&michi);
 
 		panel_render(&panel);
 
