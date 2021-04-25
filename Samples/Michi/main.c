@@ -421,7 +421,7 @@ void lexer_advance_token(Lexer *l) {
 					}
 				}
 
-				if (!isalnum(a)) {
+				if (!isalnum(a) && a != '_') {
 					_lexer_consume_character(l);
 					_lexer_make_error_token(l, "Invalid character");
 					return;
@@ -429,7 +429,7 @@ void lexer_advance_token(Lexer *l) {
 
 				while (l->tokenizing) {
 					_lexer_consume_character(l);
-					if (!isalnum(*l->current)) break;
+					if (!isalnum(*l->current) && a != '_') break;
 				}
 
 				_lexer_make_token(l, TOKEN_KIND_IDENTIFIER);
@@ -507,7 +507,7 @@ typedef bool(*Panel_Styler)(Panel_Style *style);
 
 bool panel_default_styler(Panel_Style *style) {
 	const char *font_file = "Stanberry.ttf";
-	const float font_size = 24;
+	const float font_size = 16;
 	const int font_bitmap_w = 512;
 	const int font_bitmap_h = 512;
 
