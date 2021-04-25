@@ -548,12 +548,17 @@ Expr *expr_allocator_push(Expr_Allocator *allocator) {
 	Expr_Bucket *buk = NULL;
 	if (allocator->count && allocator->buckets[allocator->count - 1]->used != EXPR_PER_BUCKET) {
 		buk = allocator->buckets[allocator->count - 1];
+	} else if (allocator->count < allocator->allocated) {
+		buk = allocator->buckets[allocator->count];
+		allocator->count += 1;
 	} else {
-		buk = malloc(sizeof(Expr_Bucket));
-		buk->used = 0;
 		allocator->allocated = _array_get_grow_capacity(allocator->allocated, 1);
 		allocator->buckets = realloc(allocator->buckets, sizeof(Expr_Bucket *) * allocator->allocated);
-		allocator->buckets[allocator->count] = buk;
+		for (size_t index = allocator->count; index < allocator->allocated; ++index) {
+			allocator->buckets[index] = malloc(sizeof(Expr_Bucket));
+			allocator->buckets[index]->used = 0;
+		}
+		buk = allocator->buckets[allocator->count];
 		allocator->count += 1;
 	}
 
