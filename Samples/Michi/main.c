@@ -7,15 +7,13 @@
 * [Font]
 * [Mesh]
 * [Rendering]
-* [Code]
-* [Panel]
-* [Actor]
+* [Parser]
+* [Michi]
 */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <stdbool.h>
 #include <ctype.h>
 
 #include "glfw/include/GLFW/glfw3.h"
@@ -41,6 +39,10 @@
 //
 // Utility Structs & Functions
 //
+
+typedef enum {
+	false, true
+} bool;
 
 float lerp(float a, float b, float t) { return (1.0f - t) * a + t * b; }
 
@@ -82,6 +84,13 @@ typedef struct {
 	char *data;
 } String;
 
+#define STRING(S) (String){ sizeof(S) - 1, S }
+
+bool string_match(String a, String b) {
+	if (a.length != b.length) return false;
+	return memcmp(a.data, b.data, a.length) == 0;
+}
+
 //
 // Context
 //
@@ -113,6 +122,9 @@ bool context_create() {
 	}
 
 	glfwSetErrorCallback(glfw_error);
+
+	glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
+	glfwWindowHint(GLFW_SAMPLES, 4);
 
 	context.window = glfwCreateWindow(800, 600, "Michi", NULL, NULL);
 	if (!context.window) {
@@ -275,7 +287,7 @@ float render_font_stub(Font *font, V2 pos, const char *text, size_t len) {
 }
 
 //
-// Code
+// Parser
 //
 
 typedef enum {
@@ -292,6 +304,8 @@ typedef enum {
 	TOKEN_KIND_MUL,
 	TOKEN_KIND_DIV,
 	TOKEN_KIND_PERIOD,
+	TOKEN_KIND_COMMA,
+	TOKEN_KIND_COLON,
 
 	TOKEN_KIND_IDENTIFIER,
 
@@ -301,6 +315,7 @@ typedef enum {
 typedef struct {
 	Token_Kind	kind;
 	String		string;
+	double		number;
 } Token;
 
 typedef struct {
@@ -308,9 +323,7 @@ typedef struct {
 	char *token_start;
 	char *current;
 
-	double number;
-
-	char *error;
+	String error;
 
 	Token token;
 
@@ -323,8 +336,6 @@ void lexer_init(Lexer *l, char *first) {
 	l->first = first;
 	l->token_start = first;
 	l->current = first;
-
-	l->number = 0;
 
 	l->tokenizing = (*first != 0);
 }
@@ -353,7 +364,7 @@ void _lexer_make_token(Lexer *l, Token_Kind kind) {
 	l->token_start = l->current;
 }
 
-void _lexer_make_error_token(Lexer *l, char *error) {
+void _lexer_make_error_token(Lexer *l, String error) {
 	_lexer_make_token(l, TOKEN_KIND_ERROR);
 	l->error = error;
 }
@@ -379,8 +390,11 @@ void lexer_advance_token(Lexer *l) {
 			case '-': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_MINUS); return;
 			case '*': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_MUL); return;
 			case '/': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_DIV); return;
+			case '=': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_EQUALS); return;
 			case '(': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_BRACKET_OPEN); return;
 			case ')': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_BRACKET_CLOSE); return;
+			case ',': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_COMMA); return;
+			case ':': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_COLON); return;
 
 			case '.': {
 				if (isdigit(b)) {
@@ -392,10 +406,10 @@ void lexer_advance_token(Lexer *l) {
 					} else {
 						_lexer_consume_characters(l, endptr - l->current);
 						if (errno == ERANGE) {
-							_lexer_make_error_token(l, "Number literal out of range");
+							_lexer_make_error_token(l, STRING("Number literal out of range"));
 						} else {
-							l->number = value;
 							_lexer_make_token(l, TOKEN_KIND_NUMBER_LITERAL);
+							l->token.number = value;
 						}
 					}
 				} else {
@@ -412,10 +426,10 @@ void lexer_advance_token(Lexer *l) {
 					if (l->current != endptr) {
 						_lexer_consume_characters(l, endptr - l->current);
 						if (errno == ERANGE) {
-							_lexer_make_error_token(l, "Number literal out of range");
+							_lexer_make_error_token(l, STRING("Number literal out of range"));
 						} else {
-							l->number = value;
 							_lexer_make_token(l, TOKEN_KIND_NUMBER_LITERAL);
+							l->token.number = value;
 						}
 						return;
 					}
@@ -423,7 +437,7 @@ void lexer_advance_token(Lexer *l) {
 
 				if (!isalnum(a) && a != '_') {
 					_lexer_consume_character(l);
-					_lexer_make_error_token(l, "Invalid character");
+					_lexer_make_error_token(l, STRING("Invalid character"));
 					return;
 				}
 
@@ -441,8 +455,403 @@ void lexer_advance_token(Lexer *l) {
 	_lexer_make_token(l, TOKEN_KIND_EOF);
 }
 
+typedef enum {
+	EXPR_KIND_NONE,
+	EXPR_KIND_NUMBER_LITERAL,
+	EXPR_KIND_IDENTIFIER,
+	EXPR_KIND_UNARY_OPERATOR,
+	EXPR_KIND_BINARY_OPERATOR,
+
+	_EXPR_KIND_COUNT,
+} Expr_Kind;
+
+typedef enum {
+	OP_KIND_NULL = -1,
+	OP_KIND_PLUS = TOKEN_KIND_PLUS,
+	OP_KIND_MINUS = TOKEN_KIND_MINUS,
+	OP_KIND_DIV = TOKEN_KIND_DIV,
+	OP_KIND_MUL = TOKEN_KIND_MUL,
+	OP_KIND_EQUALS = TOKEN_KIND_EQUALS,
+	OP_KIND_PERIOD = TOKEN_KIND_PERIOD,
+	OP_KIND_COMMA = TOKEN_KIND_COMMA,
+	OP_KIND_COLON = TOKEN_KIND_COLON,
+	OP_KIND_BRACKET = TOKEN_KIND_BRACKET_CLOSE,
+} Op_Kind;
+
+struct Expr;
+struct Expr {
+	Expr_Kind kind;
+
+	String string;
+
+	union {
+		struct {
+			double value;
+		} number;
+
+		struct {
+			Op_Kind kind;
+			struct Expr *child;
+		} unary_op;
+
+		struct {
+			Op_Kind kind;
+			struct Expr *left;
+			struct Expr *right;
+		} binary_op;
+	};
+};
+typedef struct Expr Expr;
+
+typedef struct {
+	Token *tokens;
+	size_t count;
+	size_t allocated;
+} Token_Array;
+
+inline size_t _array_get_grow_capacity(size_t c, size_t n) {
+	if (c) {
+		size_t geom = c + c / 2;
+		size_t new_capacity = c + n;
+		if (c < new_capacity) return (new_capacity);
+		return geom;
+	}
+	return 8;
+}
+
+void token_array_add(Token_Array *a, Token tok) {
+	if (a->count == a->allocated) {
+		a->allocated = _array_get_grow_capacity(a->allocated, 1);
+		a->tokens = realloc(a->tokens, sizeof(Token) * a->allocated);
+	}
+	a->tokens[a->count] = tok;
+	a->count++;
+}
+
+void token_array_reset(Token_Array *a) {
+	a->count = 0;
+}
+
+#define EXPR_PER_BUCKET 1000
+typedef struct {
+	Expr exprs[EXPR_PER_BUCKET];
+	size_t used;
+} Expr_Bucket;
+
+typedef struct {
+	Expr_Bucket **buckets;
+	size_t count;
+	size_t allocated;
+} Expr_Allocator;
+
+Expr *expr_allocator_push(Expr_Allocator *allocator) {
+	Expr_Bucket *buk = NULL;
+	if (allocator->count && allocator->buckets[allocator->count - 1]->used != EXPR_PER_BUCKET) {
+		buk = allocator->buckets[allocator->count - 1];
+	} else {
+		buk = malloc(sizeof(Expr_Bucket));
+		buk->used = 0;
+		allocator->allocated = _array_get_grow_capacity(allocator->allocated, 1);
+		allocator->buckets = realloc(allocator->buckets, sizeof(Expr_Bucket *) * allocator->allocated);
+		allocator->buckets[allocator->count] = buk;
+		allocator->count += 1;
+	}
+
+	Expr *expr = &buk->exprs[buk->used];
+	buk->used += 1;
+	return expr;
+}
+
+void expr_allocator_reset(Expr_Allocator *allocator) {
+	size_t count = allocator->count;
+	for (size_t i = 0; i < count; ++i) {
+		allocator->buckets[i]->used = 0;
+	}
+	allocator->count = 0;
+}
+
+typedef struct {
+	String content;
+	String message;
+} Parse_Error;
+
+typedef struct {
+	Parse_Error *error;
+	size_t count;
+	size_t allocated;
+} Error_Stream;
+
+void error_stream_add(Error_Stream *stream, String content, String message) {
+	if (stream->count == stream->allocated) {
+		stream->allocated = _array_get_grow_capacity(stream->allocated, 1);
+		stream->error = realloc(stream->error, sizeof(*stream->error) * stream->allocated);
+	}
+	stream->error[stream->count] = (Parse_Error){ content, message };
+	stream->count += 1;
+}
+
+void error_stream_reset(Error_Stream *stream) {
+	stream->count = 0;
+}
+
+typedef struct {
+	Token_Array tokens;
+	Expr_Allocator allocator;
+	Error_Stream error_stream;
+	Lexer lexer;
+	size_t cursor;
+	Expr null_expr;
+} Parser;
+
+void parser_create(Parser *parser) {
+	memset(parser, 0, sizeof(*parser));
+	parser->null_expr.kind = EXPR_KIND_NONE;
+}
+
+void parser_consume_token(Parser *parser) {
+	if (parser->cursor != parser->tokens.count) {
+		parser->cursor += 1;
+	}
+}
+
+Token parser_peek_token(Parser *parser) {
+	if (parser->cursor != parser->tokens.count) {
+		return parser->tokens.tokens[parser->cursor];
+	}
+	return parser->tokens.tokens[parser->tokens.count - 1];
+}
+
+Expr *parser_null_expr(Parser *parser) {
+	return &parser->null_expr;
+}
+
+void parser_report_error(Parser *parser, String content, String message) {
+	error_stream_add(&parser->error_stream, content, message);
+}
+
+int token_op_precedence(Token_Kind op_kind) {
+	switch (op_kind) {
+		case TOKEN_KIND_EQUALS:
+		case TOKEN_KIND_COLON:
+			return 10;
+
+		case TOKEN_KIND_COMMA:
+			return 15;
+
+		case TOKEN_KIND_PLUS:
+		case TOKEN_KIND_MINUS:
+			return 80;
+
+		case TOKEN_KIND_MUL:
+		case TOKEN_KIND_DIV:
+			return 90;
+
+		case TOKEN_KIND_BRACKET_OPEN:
+			return 100;
+	}
+
+	return -1;
+}
+
+typedef enum {
+	ASSOCIATIVITY_LR,
+	ASSOCIATIVITY_RL
+} Associativity;
+
+Associativity token_op_associativity(Token_Kind op_kind) {
+	switch (op_kind) {
+		case TOKEN_KIND_EQUALS:
+		case TOKEN_KIND_COLON:
+
+			return ASSOCIATIVITY_RL;
+
+		case TOKEN_KIND_PLUS:
+		case TOKEN_KIND_MINUS:
+		case TOKEN_KIND_MUL:
+		case TOKEN_KIND_DIV:
+		case TOKEN_KIND_PERIOD:
+		case TOKEN_KIND_COMMA:
+		case TOKEN_KIND_BRACKET_OPEN:
+			return ASSOCIATIVITY_LR;
+	}
+
+	return ASSOCIATIVITY_RL;
+}
+
+Expr *expr_number_literal(Parser *parser, String content, double value) {
+	Expr *expr = expr_allocator_push(&parser->allocator);
+	expr->kind = EXPR_KIND_NUMBER_LITERAL;
+	expr->string = content;
+	expr->number.value = value;
+	return expr;
+}
+
+Expr *expr_unary_operator(Parser *parser, String content, Op_Kind kind, Expr *child) {
+	Expr *expr = expr_allocator_push(&parser->allocator);
+	expr->kind = EXPR_KIND_UNARY_OPERATOR;
+	expr->string = content;
+	expr->unary_op.kind = kind;
+	expr->unary_op.child = child;
+	return expr;
+}
+
+Expr *expr_binary_operator(Parser *parser, String content, Op_Kind kind, Expr *left, Expr *right) {
+	Expr *expr = expr_allocator_push(&parser->allocator);
+	expr->kind = EXPR_KIND_BINARY_OPERATOR;
+	expr->string = content;
+	expr->binary_op.kind = kind;
+	expr->binary_op.left = left;
+	expr->binary_op.right = right;
+	return expr;
+}
+
+Expr *expr_identifier(Parser *parser, String content) {
+	Expr *expr = expr_allocator_push(&parser->allocator);
+	expr->kind = EXPR_KIND_IDENTIFIER;
+	expr->string = content;
+	return expr;
+}
+
+Expr *parse_expression(Parser *parser, int prec, Token_Kind expect);
+Expr *parse_subexpression(Parser *parser);
+
+Expr *parse_subexpression(Parser *parser) {
+	Token token = parser_peek_token(parser);
+
+	Expr *node = NULL;
+
+	switch (token.kind) {
+		case TOKEN_KIND_PLUS:
+		case TOKEN_KIND_MINUS: {
+			parser_consume_token(parser);
+			Expr *child = parse_subexpression(parser);
+			node = expr_unary_operator(parser, token.string, token.kind, child);
+		} break;
+
+		case TOKEN_KIND_NUMBER_LITERAL: {
+			parser_consume_token(parser);
+			node = expr_number_literal(parser, token.string, token.number);
+		} break;
+
+		case TOKEN_KIND_IDENTIFIER: {
+			parser_consume_token(parser);
+			node = expr_identifier(parser, token.string);
+		} break;
+
+		case TOKEN_KIND_BRACKET_OPEN: {
+			parser_consume_token(parser);
+			Expr *child = parse_expression(parser, -1, TOKEN_KIND_BRACKET_CLOSE);
+			token = parser_peek_token(parser);
+			if (token.kind == TOKEN_KIND_BRACKET_CLOSE) {
+				parser_consume_token(parser);
+			} else {
+				parser_report_error(parser, token.string, STRING("Expected \")\""));
+			}
+			node = expr_unary_operator(parser, token.string, OP_KIND_BRACKET, child);
+		} break;
+
+		case TOKEN_KIND_BRACKET_CLOSE: {
+			parser_consume_token(parser);
+			parser_report_error(parser, token.string, STRING("Bracket mismatch!"));
+			return parser_null_expr(parser);
+		} break;
+	}
+
+	if (node) return node;
+
+	parser_report_error(parser, token.string, STRING("Expected expression"));
+	return parser_null_expr(parser);
+}
+
+Expr *parse_binary_operator(Parser *parser, Expr *left) {
+	Op_Kind op = OP_KIND_NULL;
+
+	Token token = parser_peek_token(parser);
+
+	switch (token.kind) {
+		case TOKEN_KIND_PLUS: op = OP_KIND_PLUS; break;
+		case TOKEN_KIND_MINUS: op = OP_KIND_MINUS; break;
+		case TOKEN_KIND_MUL: op = OP_KIND_MUL; break;
+		case TOKEN_KIND_DIV: op = OP_KIND_DIV; break;
+		case TOKEN_KIND_PERIOD: op = OP_KIND_PERIOD; break;
+		case TOKEN_KIND_EQUALS: op = OP_KIND_EQUALS; break;
+		case TOKEN_KIND_COMMA: op = OP_KIND_COMMA; break;
+		case TOKEN_KIND_COLON: op = OP_KIND_COLON; break;
+
+		case TOKEN_KIND_BRACKET_CLOSE: {
+			parser_consume_token(parser);
+			Expr *right = parser_null_expr(parser);
+			parser_report_error(parser, token.string, STRING("Bracket mismatch"));
+			return expr_binary_operator(parser, token.string, OP_KIND_NULL, left, right);
+		} break;
+
+		default: {
+			parser_report_error(parser, token.string, STRING("Expected operator"));
+			return expr_binary_operator(parser, token.string, OP_KIND_NULL, left, NULL);
+		} break;
+	}
+
+	parser_consume_token(parser);
+	return expr_binary_operator(parser, token.string, op, left, NULL);
+}
+
+Expr *parse_expression(Parser *parser, int prec, Token_Kind expect) {
+	Token token = parser_peek_token(parser);
+	if (token.kind != TOKEN_KIND_EOF) {
+		Expr *a_node = parse_subexpression(parser);
+		
+		token = parser_peek_token(parser);
+		while (token.kind != TOKEN_KIND_EOF) {
+			if (token.kind == expect) break;
+
+			int op_prec = token_op_precedence(token.kind);
+			if (op_prec < prec) break;
+			if (op_prec == prec && token_op_associativity(token.kind) == ASSOCIATIVITY_LR) break;
+
+			Expr *op_node = parse_binary_operator(parser, a_node);
+
+			if (op_node->binary_op.right == NULL) {
+				op_node->binary_op.right = parse_expression(parser, expect, op_prec);
+			}
+
+			a_node = op_node;
+
+			token = parser_peek_token(parser);
+		}
+
+		return a_node;
+	}
+
+	parser_report_error(parser, token.string, STRING("Expected expression"));
+	return parser_null_expr(parser);
+}
+
+Expr *parse(Parser *parser, char *text) {
+	lexer_init(&parser->lexer, text);
+	lexer_advance_token(&parser->lexer);
+
+	token_array_reset(&parser->tokens);
+	expr_allocator_reset(&parser->allocator);
+	error_stream_reset(&parser->error_stream);
+
+	Lexer *lexer = &parser->lexer;
+	while (lexer->token.kind != TOKEN_KIND_EOF) {
+		if (lexer->token.kind == TOKEN_KIND_ERROR) {
+			parser_report_error(parser, lexer->token.string, lexer->error);
+			return parser_null_expr(parser);
+		}
+		token_array_add(&parser->tokens, lexer->token);
+		lexer_advance_token(lexer);
+	}
+	token_array_add(&parser->tokens, lexer->token);
+
+	parser->cursor = 0;
+
+	return parse_expression(parser, -1, TOKEN_KIND_EOF);
+}
+
 //
-// Panel
+// Michi
 //
 
 typedef enum {
@@ -473,6 +882,7 @@ typedef struct {
 	double cursor_dposition;
 	double cursor_dsize;
 	V2 cursor_size[2];
+	V2 error_offset;
 	V4 colors[_PANEL_COLOR_COUNT];
 } Panel_Style;
 
@@ -489,6 +899,8 @@ typedef enum {
 	PANEL_STATE_TYPING,
 } Panel_State;
 
+
+struct Michi;
 typedef struct {
 	Panel_Style style;
 	Panel_Text_Input text_input;
@@ -500,8 +912,26 @@ typedef struct {
 	float cursor_position;
 	float cursor_position_target;
 	V2 cursor_size;
+	size_t error_cursor_index;
 	bool hovering;
+
+	struct Michi *michi;
 } Panel;
+
+typedef struct {
+	V2 position;
+	float rotation;
+	V2 scale;
+	V4 color;
+} Actor;
+
+struct Michi {
+	Actor actor;
+	Panel panel;
+	Parser parser;
+	float size;
+};
+typedef struct Michi Michi;
 
 typedef bool(*Panel_Styler)(Panel_Style *style);
 
@@ -524,6 +954,7 @@ bool panel_default_styler(Panel_Style *style) {
 	style->cursor_dsize = 0.00000001;
 	style->cursor_size[0] = v2(2.0f, 0.7f * style->height);
 	style->cursor_size[1] = v2(0.5f * font_size, 0.7f * style->height);
+	style->error_offset = v2(10, 10);
 
 	style->colors[PANEL_COLOR_BACKGROUND] = v4(0.04f, 0.04f, 0.04f, 1.0f);
 	style->colors[PANEL_COLOR_INPUT_INDICATOR] = v4(0.2f, 0.6f, 0.6f, 1.0f);
@@ -663,6 +1094,17 @@ void panel_on_key_input(GLFWwindow *window, int key, int scancode, int action, i
 					case GLFW_KEY_LEFT: panel_set_cursor(panel, panel->text_input.cursor ? panel->text_input.cursor - 1 : 0); break;
 					case GLFW_KEY_HOME: panel_set_cursor(panel, 0); break;
 					case GLFW_KEY_END: panel_set_cursor(panel, panel->text_input.count); break;
+
+					case GLFW_KEY_TAB: {
+						Michi *michi = panel->michi;
+						if (michi->parser.error_stream.count) {
+							if (panel->error_cursor_index >= michi->parser.error_stream.count)
+								panel->error_cursor_index = 0;
+							size_t cursor = michi->parser.error_stream.error[panel->error_cursor_index].content.data - panel->text_input.buffer;
+							panel->error_cursor_index += 1;
+							panel_set_cursor(panel, cursor);
+						}
+					} break;
 				}
 			}
 		} break;
@@ -686,7 +1128,7 @@ void panel_on_text_input(GLFWwindow *window, unsigned int codepoint) {
 	}
 }
 
-bool panel_create(Panel_Styler styler, Panel *panel) {
+bool panel_create(Panel_Styler styler, Michi *michi, Panel *panel) {
 	if (styler == NULL)
 		styler = panel_default_styler;
 
@@ -702,7 +1144,10 @@ bool panel_create(Panel_Styler styler, Panel *panel) {
 	panel->cursor_position = panel->style.indicator_size;
 	panel->cursor_position_target = panel->style.indicator_size;
 	panel->cursor_size = panel->style.cursor_size[1];
+	panel->error_cursor_index = 0;
 	panel->hovering = false;
+
+	panel->michi = michi;
 
 	return true;
 }
@@ -821,19 +1266,41 @@ void panel_render(Panel *panel) {
 
 	glDisable(GL_SCISSOR_TEST);
 
+	if (panel->text_input.count) {
+		Michi *michi = panel->michi;
+
+		panel->text_input.buffer[panel->text_input.count] = 0;
+		Expr *expr = parse(&michi->parser, michi->panel.text_input.buffer);
+
+		if (michi->parser.error_stream.count) {
+			glEnable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, panel->style.font.texture.id);
+			glBegin(GL_QUADS);
+
+			Font *font = &panel->style.font;
+
+			char buff[50];
+			int len = 0;
+			float x_add = 0;
+			V4 error_color = panel->style.colors[PANEL_COLOR_CODE_ERROR];
+
+			V2 pos = v2add(panel->style.error_offset, v2(0, panel->style.height));
+			size_t count = michi->parser.error_stream.count;
+			for (size_t index = 0; index < count; ++index) {
+				Parse_Error *error = &michi->parser.error_stream.error[index];
+				len = snprintf(buff, 50, "%d:", (int)(error->content.data - panel->text_input.buffer));
+				x_add = render_font(font, pos, error_color, buff, len);
+				render_font(font, v2add(pos, v2(x_add, 0)), error_color, error->message.data, error->message.length);
+				pos.y += font->size;
+			}
+
+			glEnd();
+			glDisable(GL_TEXTURE_2D);
+		}
+	}
+
 	glPopMatrix();
 }
-
-//
-// Actor
-//
-
-typedef struct {
-	V2 position;
-	float rotation;
-	V2 scale;
-	V4 color;
-} Actor;
 
 void actor_render(Actor *actor) {
 	glPushMatrix();
@@ -850,22 +1317,65 @@ void actor_render(Actor *actor) {
 	glEnd();
 }
 
-//
-// Michi
-//
+bool michi_create(float size, Panel_Styler styler, Michi *michi) {
+	if (!panel_create(styler, michi, &michi->panel)) {
+		fprintf(stderr, "Panel failed to create!\n");
+		return false;
+	}
 
-typedef struct {
-	float size;
-	Actor actor;
-} Michi;
+	parser_create(&michi->parser);
 
-void michi_create(float size, Michi *michi) {
 	michi->size = size;
 
 	michi->actor.position = v2(0, 0);
 	michi->actor.rotation = 0;
 	michi->actor.scale = v2(4, 4);
 	michi->actor.color = v4(0, 1, 1, 1);
+
+	return true;
+}
+
+void michi_update(Michi *michi, float dt) {
+	panel_update(&michi->panel, dt);
+}
+
+float michi_debug_render_expr(Expr *expr, V2 pos, Font *font) {
+	switch (expr->kind) {
+		case EXPR_KIND_NONE: {
+			String text = STRING("Expr None");
+			render_font(font, pos, v4(1, 1, 1, 1), text.data, text.length);
+			return pos.y - 20;
+		} break;
+
+		case EXPR_KIND_NUMBER_LITERAL: {
+			char buf[150];
+			int len = snprintf(buf, 150, "Expr Number %.3f", expr->number.value);
+			render_font(font, pos, v4(1, 1, 1, 1), buf, len);
+			return pos.y - 20;
+		} break;
+
+		case EXPR_KIND_IDENTIFIER: {
+			render_font(font, pos, v4(1, 1, 1, 1), expr->string.data, expr->string.length);
+			return pos.y - 20;
+		} break;
+
+		case EXPR_KIND_UNARY_OPERATOR: {
+			String text = STRING("Expr Unary");
+			render_font(font, pos, v4(1, 1, 1, 1), text.data, text.length);
+			pos.y = michi_debug_render_expr(expr->unary_op.child, v2add(pos, v2(20, -20)), font);
+			return pos.y;
+		} break;
+
+		case EXPR_KIND_BINARY_OPERATOR: {
+			String text = STRING("Expr Binary");
+			render_font(font, pos, v4(1, 1, 1, 1), text.data, text.length);
+			pos.y = michi_debug_render_expr(expr->binary_op.left, v2add(pos, v2(20, -20)), font);
+			pos.y = michi_debug_render_expr(expr->binary_op.right, v2add(pos, v2(20, 0)), font);
+			return pos.y;
+		} break;
+	}
+
+	return pos.y;
 }
 
 void michi_render(Michi *michi) {
@@ -880,6 +1390,8 @@ void michi_render(Michi *michi) {
 	actor_render(&michi->actor);
 
 	glPopMatrix();
+
+	panel_render(&michi->panel);
 }
 
 int main(int argc, char *argv[]) {
@@ -887,16 +1399,18 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 
-	Panel panel;
-	if (!panel_create(NULL, &panel)) {
-		fprintf(stderr, "Panel failed to create!\n");
+	Michi *michi = malloc(sizeof(Michi));
+	if (michi == NULL) {
+		fprintf(stderr, "Out of memory!\n");
 		return -1;
 	}
 
-	Michi michi;
-	michi_create(100, &michi);
+	if (!michi_create(100, NULL, michi)) {
+		fprintf(stderr, "Failed to create Michi\n");
+		return -1;
+	}
 
-	glfwSetWindowUserPointer(context.window, &panel);
+	glfwSetWindowUserPointer(context.window, &michi->panel);
 	glfwSetCursorPosCallback(context.window, panel_on_cursor_pos_changed);
 	glfwSetCharCallback(context.window, panel_on_text_input);
 	glfwSetKeyCallback(context.window, panel_on_key_input);
@@ -917,16 +1431,14 @@ int main(int argc, char *argv[]) {
 		glfwGetFramebufferSize(context.window, &context.framebuffer_w, &context.framebuffer_h);
 		glfwGetWindowSize(context.window, &context.window_w, &context.window_h);
 
-		panel_update(&panel, dt);
+		michi_update(michi, dt);
 
 		glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 		
 		glViewport(0, 0, context.framebuffer_w, context.framebuffer_h);
 
-		michi_render(&michi);
-
-		panel_render(&panel);
+		michi_render(michi);
 
 		glfwSwapBuffers(context.window);
 
