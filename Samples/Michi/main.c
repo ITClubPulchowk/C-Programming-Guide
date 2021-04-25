@@ -7,6 +7,7 @@
 * [Font]
 * [Mesh]
 * [Rendering]
+* [Code]
 * [Panel]
 * [Actor]
 */
@@ -15,6 +16,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 #include "glfw/include/GLFW/glfw3.h"
 
@@ -273,6 +275,173 @@ float render_font_stub(Font *font, V2 pos, const char *text, size_t len) {
 }
 
 //
+// Code
+//
+
+typedef enum {
+	TOKEN_KIND_ERROR,
+	TOKEN_KIND_EOF,
+
+	TOKEN_KIND_NUMBER_LITERAL,
+
+	TOKEN_KIND_PLUS,
+	TOKEN_KIND_MINUS,
+	TOKEN_KIND_EQUALS,
+	TOKEN_KIND_BRACKET_OPEN,
+	TOKEN_KIND_BRACKET_CLOSE,
+	TOKEN_KIND_MUL,
+	TOKEN_KIND_DIV,
+	TOKEN_KIND_PERIOD,
+
+	TOKEN_KIND_IDENTIFIER,
+
+	_TOKEN_KIND_COUNT
+} Token_Kind;
+
+typedef struct {
+	Token_Kind	kind;
+	String		string;
+} Token;
+
+typedef struct {
+	char *first;
+	char *token_start;
+	char *current;
+
+	double number;
+
+	char *error;
+
+	Token token;
+
+	char scratch[512];
+
+	bool tokenizing;
+} Lexer;
+
+void lexer_init(Lexer *l, char *first) {
+	l->first = first;
+	l->token_start = first;
+	l->current = first;
+
+	l->number = 0;
+
+	l->tokenizing = (*first != 0);
+}
+
+void _lexer_consume_character(Lexer *l) {
+	if (l->tokenizing) {
+		l->current += 1;
+		if (*l->current == 0)
+			l->tokenizing = false;
+	}
+}
+
+void _lexer_consume_characters(Lexer *l, size_t count) {
+	for (size_t i = 0; i < count; ++i)
+		_lexer_consume_character(l);
+}
+
+void _lexer_set_token_start(Lexer *l) {
+	l->token_start = l->current;
+}
+
+void _lexer_make_token(Lexer *l, Token_Kind kind) {
+	l->token.kind = kind;
+	l->token.string.data = l->token_start;
+	l->token.string.length = l->current - l->token_start;
+	l->token_start = l->current;
+}
+
+void _lexer_make_error_token(Lexer *l, char *error) {
+	_lexer_make_token(l, TOKEN_KIND_ERROR);
+	l->error = error;
+}
+
+void lexer_advance_token(Lexer *l) {
+	while (l->tokenizing) {
+		char a = *l->current;
+		char b = *(l->current + 1);
+
+		if (isspace(a)) {
+			_lexer_consume_character(l);
+
+			while (l->tokenizing && isspace(*l->current)) {
+				_lexer_consume_character(l);
+			}
+
+			_lexer_set_token_start(l);
+			continue;
+		}
+
+		switch (a) {
+			case '+': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_PLUS); return;
+			case '-': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_MINUS); return;
+			case '*': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_MUL); return;
+			case '/': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_DIV); return;
+			case '(': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_BRACKET_OPEN); return;
+			case ')': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_BRACKET_CLOSE); return;
+
+			case '.': {
+				if (isdigit(b)) {
+					char *endptr = NULL;
+					double value = strtod(l->current, &endptr);
+					if (l->current == endptr) {
+						_lexer_consume_character(l);
+						_lexer_make_token(l, TOKEN_KIND_PERIOD);
+					} else {
+						_lexer_consume_characters(l, endptr - l->current);
+						if (errno == ERANGE) {
+							_lexer_make_error_token(l, "Number literal out of range");
+						} else {
+							l->number = value;
+							_lexer_make_token(l, TOKEN_KIND_NUMBER_LITERAL);
+						}
+					}
+				} else {
+					_lexer_consume_character(l);
+					_lexer_make_token(l, TOKEN_KIND_PERIOD);
+				}
+				return;
+			} break;
+
+			default: {
+				if (isdigit(a)) {
+					char *endptr = NULL;
+					double value = strtod(l->current, &endptr);
+					if (l->current != endptr) {
+						_lexer_consume_characters(l, endptr - l->current);
+						if (errno == ERANGE) {
+							_lexer_make_error_token(l, "Number literal out of range");
+						} else {
+							l->number = value;
+							_lexer_make_token(l, TOKEN_KIND_NUMBER_LITERAL);
+						}
+						return;
+					}
+				}
+
+				if (!isalnum(a)) {
+					_lexer_consume_character(l);
+					_lexer_make_error_token(l, "Invalid character");
+					return;
+				}
+
+				while (l->tokenizing) {
+					_lexer_consume_character(l);
+					if (!isalnum(*l->current)) break;
+				}
+
+				_lexer_make_token(l, TOKEN_KIND_IDENTIFIER);
+				return;
+			} break;
+		}
+	}
+
+	_lexer_make_token(l, TOKEN_KIND_EOF);
+}
+
+//
 // Panel
 //
 
@@ -282,9 +451,15 @@ typedef enum {
 
 	PANEL_COLOR_CURSOR0,
 	PANEL_COLOR_CURSOR1,
+	PANEL_COLOR_CURSOR_NO_TYPE,
 
 	PANEL_COLOR_TEXT_INPUT_PLACEHOLDER,
-	PANEL_COLOR_CODE,
+
+	PANEL_COLOR_CODE_GENERAL,
+	PANEL_COLOR_CODE_ERROR,
+	PANEL_COLOR_CODE_NUMBER_LITERAL,
+	PANEL_COLOR_CODE_IDENTIFIER,
+	PANEL_COLOR_CODE_OPERATORS,
 	
 	_PANEL_COLOR_COUNT,
 } Panel_Color;
@@ -301,10 +476,10 @@ typedef struct {
 	V4 colors[_PANEL_COLOR_COUNT];
 } Panel_Style;
 
-#define PANEL_TEXT_INPUT_BUFFER_SIZE 255
+#define PANEL_TEXT_INPUT_BUFFER_SIZE 256
 
 typedef struct {
-	char buffer[PANEL_TEXT_INPUT_BUFFER_SIZE];
+	char buffer[PANEL_TEXT_INPUT_BUFFER_SIZE + 1]; // extra 1 for null-terminator
 	size_t count;
 	size_t cursor;
 } Panel_Text_Input;
@@ -317,6 +492,7 @@ typedef enum {
 typedef struct {
 	Panel_Style style;
 	Panel_Text_Input text_input;
+	Lexer lexer;
 
 	Panel_State state;
 	float text_position_x_offset;
@@ -353,8 +529,14 @@ bool panel_default_styler(Panel_Style *style) {
 	style->colors[PANEL_COLOR_INPUT_INDICATOR] = v4(0.2f, 0.6f, 0.6f, 1.0f);
 	style->colors[PANEL_COLOR_CURSOR0] = v4(0.2f, 0.8f, 0.2f, 1.f);
 	style->colors[PANEL_COLOR_CURSOR1] = v4(0.2f, 0.6f, 0.6f, 1.0f);
+	style->colors[PANEL_COLOR_CURSOR_NO_TYPE] = v4(4.0f, 0.0f, 0.0f, 1.0f);
 	style->colors[PANEL_COLOR_TEXT_INPUT_PLACEHOLDER] = v4(0.5, 0.5f, 0.5f, 1.0f);
-	style->colors[PANEL_COLOR_CODE] = v4(0.6f, 0.2f, 0.2f, 1.0f);
+
+	style->colors[PANEL_COLOR_CODE_GENERAL] = v4(.8f, .8f, .9f, 1.f);
+	style->colors[PANEL_COLOR_CODE_ERROR] = v4(1.f, .3f, .3f, 1.f);
+	style->colors[PANEL_COLOR_CODE_NUMBER_LITERAL] = v4(.3f, .3f, .8f, 1.f);
+	style->colors[PANEL_COLOR_CODE_IDENTIFIER] = v4(.3f, .9f, .3f, 1.f);
+	style->colors[PANEL_COLOR_CODE_OPERATORS] = v4(.8f, .8f, .3f, 1.f);
 
 	return true;
 }
@@ -575,7 +757,42 @@ void panel_render(Panel *panel) {
 	glBegin(GL_QUADS);
 
 	if (panel->state == PANEL_STATE_TYPING || text.length != 0) {
-		render_font(&panel->style.font, text_pos, panel->style.colors[PANEL_COLOR_CODE], text.data, text.length);
+		Panel_Style *style = &panel->style;
+		
+		panel->text_input.buffer[panel->text_input.count] = 0;
+		lexer_init(&panel->lexer, panel->text_input.buffer);
+
+		lexer_advance_token(&panel->lexer);
+
+		V4 text_color;
+		char *text_start = panel->text_input.buffer;
+		while (panel->lexer.token.kind != TOKEN_KIND_EOF) {
+			Token *token = &panel->lexer.token;
+			switch (token->kind) {
+				case TOKEN_KIND_ERROR: text_color = style->colors[PANEL_COLOR_CODE_ERROR]; break;
+				case TOKEN_KIND_NUMBER_LITERAL: text_color = style->colors[PANEL_COLOR_CODE_NUMBER_LITERAL]; break;
+				case TOKEN_KIND_IDENTIFIER: text_color = style->colors[PANEL_COLOR_CODE_IDENTIFIER]; break;
+
+				case TOKEN_KIND_PLUS:
+				case TOKEN_KIND_MINUS:
+				case TOKEN_KIND_EQUALS:
+				case TOKEN_KIND_MUL:
+				case TOKEN_KIND_DIV:
+				case TOKEN_KIND_PERIOD:
+					text_color = style->colors[PANEL_COLOR_CODE_OPERATORS];
+					break;
+
+				default: text_color = style->colors[PANEL_COLOR_CODE_GENERAL]; break;
+			}
+
+			text_pos.x = render_font(&panel->style.font, text_pos, style->colors[PANEL_COLOR_CODE_GENERAL], text_start, token->string.data - text_start);
+			text_pos.x = render_font(&panel->style.font, text_pos, text_color, token->string.data, token->string.length);
+			text_start = token->string.data + token->string.length;
+			lexer_advance_token(&panel->lexer);
+		}
+
+		char *text_end = panel->text_input.buffer + panel->text_input.count;
+		text_pos.x = render_font(&panel->style.font, text_pos, style->colors[PANEL_COLOR_CODE_GENERAL], text_start, text_end - text_start);
 	} else {
 		const char msg[] = "Enter Code...";
 		render_font(&panel->style.font, v2(panel->style.indicator_size, text_pos.y), panel->style.colors[PANEL_COLOR_TEXT_INPUT_PLACEHOLDER], msg, sizeof(msg) - 1);
@@ -587,7 +804,12 @@ void panel_render(Panel *panel) {
 	if (panel->state == PANEL_STATE_TYPING) {
 		float t = panel->cursor_t;
 		if (t > 1) t = 1;
-		V4 cursor_color = v4lerp(panel->style.colors[PANEL_COLOR_CURSOR0], panel->style.colors[PANEL_COLOR_CURSOR1], t);
+		V4 cursor_color; 
+		
+		if (text.length != PANEL_TEXT_INPUT_BUFFER_SIZE)
+			cursor_color = v4lerp(panel->style.colors[PANEL_COLOR_CURSOR0], panel->style.colors[PANEL_COLOR_CURSOR1], t);
+		else
+			cursor_color = panel->style.colors[PANEL_COLOR_CURSOR_NO_TYPE];
 
 		float mid_y = (panel->style.height - cursor_h) * 0.5f;
 		panel->cursor_position_target = cursor_render_x;
