@@ -919,17 +919,32 @@ typedef struct {
 } Panel;
 
 typedef struct {
+	float position;
+	float rotation;
+	float scale;
+	float color;
+} Actor_Speed;
+
+typedef struct {
 	V2 position;
 	float rotation;
 	V2 scale;
 	V4 color;
+
+	V2 position_target;
+	float rotation_target;
+	V2 scale_target;
+	V4 color_target;
+
+	Actor_Speed speed;
 } Actor;
 
 struct Michi {
+	float size;
+	V2 position;
 	Actor actor;
 	Panel panel;
 	Parser parser;
-	float size;
 };
 typedef struct Michi Michi;
 
@@ -1325,6 +1340,7 @@ bool michi_create(float size, Panel_Styler styler, Michi *michi) {
 
 	parser_create(&michi->parser);
 
+	michi->position = v2(0, 0);
 	michi->size = size;
 
 	michi->actor.position = v2(0, 0);
@@ -1332,10 +1348,28 @@ bool michi_create(float size, Panel_Styler styler, Michi *michi) {
 	michi->actor.scale = v2(4, 4);
 	michi->actor.color = v4(0, 1, 1, 1);
 
+	michi->actor.position_target = michi->actor.position;
+	michi->actor.rotation_target = michi->actor.rotation;
+	michi->actor.scale_target = michi->actor.scale;
+	michi->actor.color_target = michi->actor.color;
+
+	michi->actor.speed.position = 0.5;
+	michi->actor.speed.rotation = 0.5;
+	michi->actor.speed.scale = 0.5;
+	michi->actor.speed.color = 0.5;
+
 	return true;
 }
 
 void michi_update(Michi *michi, float dt) {
+	Actor *a = &michi->actor;
+	a->position = v2lerp(a->position, a->position_target, 1.0f - powf(1.0f - a->speed.position, dt));
+	a->rotation = lerp(a->rotation, a->rotation_target, 1.0f - powf(1.0f - a->speed.rotation, dt));
+	a->scale = v2lerp(a->scale, a->scale_target, 1.0f - powf(1.0f - a->speed.scale, dt));
+	a->color = v4lerp(a->color, a->color_target, 1.0f - powf(1.0f - a->speed.color, dt));
+
+	michi->position = v2lerp(michi->position, a->position, 1.0f - powf(1.0f - .99f, dt));
+
 	panel_update(&michi->panel, dt);
 }
 
@@ -1386,6 +1420,8 @@ void michi_render(Michi *michi) {
 	float half_width = half_height * aspect_ratio;
 
 	glOrtho(-half_width, half_width, -half_height, half_height, -1, 1);
+
+	glTranslatef(-michi->position.x, -michi->position.y, 0);
 
 	actor_render(&michi->actor);
 
