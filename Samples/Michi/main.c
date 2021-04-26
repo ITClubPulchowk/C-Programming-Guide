@@ -338,7 +338,7 @@ typedef enum {
 typedef struct {
 	Token_Kind			kind;
 	String				string;
-	double				number;
+	float				number;
 } Token;
 
 typedef struct {
@@ -421,7 +421,7 @@ void lexer_advance_token(Lexer *l) {
 			case '.': {
 				if (isdigit(b)) {
 					char *endptr = NULL;
-					double value = strtod(l->current, &endptr);
+					float value = strtof(l->current, &endptr);
 					if (l->current == endptr) {
 						_lexer_consume_character(l);
 						_lexer_make_token(l, TOKEN_KIND_PERIOD);
@@ -444,7 +444,7 @@ void lexer_advance_token(Lexer *l) {
 			default: {
 				if (isdigit(a)) {
 					char *endptr = NULL;
-					double value = strtod(l->current, &endptr);
+					float value = strtof(l->current, &endptr);
 					if (l->current != endptr) {
 						_lexer_consume_characters(l, endptr - l->current);
 						if (errno == ERANGE) {
@@ -601,8 +601,8 @@ struct Expr {
 		} action;
 
 		struct {
-			Expr *left;
-			Expr *right;
+			struct Expr *left;
+			struct Expr *right;
 		} statement;
 	};
 };
@@ -1662,8 +1662,8 @@ Expr *expr_evaluate_binary_operator(Parser *parser, Expr *expr, Michi *michi) {
 		return parser_null_expr(parser);
 	}
 
-	Expr *left = expr_evalutate_expression(parser, expr->binary_op.left, michi);
-	Expr *right = expr_evalutate_expression(parser, expr->binary_op.right, michi);
+	Expr *left = expr_evaluate_expression(parser, expr->binary_op.left, michi);
+	Expr *right = expr_evaluate_expression(parser, expr->binary_op.right, michi);
 
 	if (left->kind == EXPR_KIND_NONE || right->kind == EXPR_KIND_NONE)
 		return parser_null_expr(parser);
@@ -1772,7 +1772,7 @@ Expr *expr_evaluate_binary_operator(Parser *parser, Expr *expr, Michi *michi) {
 			switch (left->var.kind) {
 				case MICHI_VAR_OUTPUT: {
 					V4 out = michi->output;
-					float *ptr = &michi->output;
+					float *ptr = (float *)&michi->output;
 					switch (right->var.kind) {
 						case MICHI_VAR_X: 
 							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out.x, 0, 0, 0), 1, ptr + 0);
@@ -1796,7 +1796,7 @@ Expr *expr_evaluate_binary_operator(Parser *parser, Expr *expr, Michi *michi) {
 					switch (right->var.kind) {
 						case MICHI_VAR_POSITION: {
 							V2 out = michi->actor.position;
-							float *ptr = &michi->actor.position;
+							float *ptr = (float *)&michi->actor.position;
 							result = expr_var(parser, expr->string, MICHI_VAR_POSITION, v4(out.x, out.y, 0, 0), 2, ptr);
 						} break;
 						case MICHI_VAR_ROTATION: {
@@ -1806,12 +1806,12 @@ Expr *expr_evaluate_binary_operator(Parser *parser, Expr *expr, Michi *michi) {
 						} break;
 						case MICHI_VAR_SCALE: {
 							V2 out = michi->actor.scale;
-							float *ptr = &michi->actor.scale;
+							float *ptr = (float *)&michi->actor.scale;
 							result = expr_var(parser, expr->string, MICHI_VAR_SCALE, v4(out.x, out.y, 0, 0), 2, ptr);
 						} break;
 						case MICHI_VAR_COLOR: {
 							V4 out = michi->actor.color;
-							float *ptr = &michi->actor.color;
+							float *ptr = (float *)&michi->actor.color;
 							result = expr_var(parser, expr->string, MICHI_VAR_COLOR, v4(out.x, out.y, out.z, out.w), 4, ptr);
 						} break;
 					}
