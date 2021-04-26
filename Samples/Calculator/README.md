@@ -31,7 +31,9 @@ Simple error messages are displayed. So, don't make hard errors.
 # Build 
 <br> 
 For windows : <br>
+``` bash 
 Run `build.bat` 
+```
 <br>
 It will generate bin/ folder if it doesn't exist and put executable inside bin.
 <br>
