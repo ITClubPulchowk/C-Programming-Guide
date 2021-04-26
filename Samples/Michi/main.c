@@ -667,7 +667,6 @@ Associativity token_op_associativity(Token_Kind op_kind) {
 	switch (op_kind) {
 		case TOKEN_KIND_EQUALS:
 		case TOKEN_KIND_COLON:
-
 			return ASSOCIATIVITY_RL;
 
 		case TOKEN_KIND_PLUS:
@@ -851,6 +850,10 @@ Expr *parse(Parser *parser, char *text) {
 	token_array_add(&parser->tokens, lexer->token);
 
 	parser->cursor = 0;
+
+	if (parser->tokens.tokens[0].kind = TOKEN_KIND_EOF) {
+		return parser_null_expr(parser);
+	}
 
 	return parse_expression(parser, -1, TOKEN_KIND_EOF);
 }
