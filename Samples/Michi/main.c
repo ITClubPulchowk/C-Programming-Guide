@@ -29,12 +29,16 @@
 // Helper Macros
 //
 
+#define MATH_PI 3.1415926535f
+
 #define ARRAY_COUNT(A) (sizeof(A)/sizeof((A)[0]))
 
 #define MINIMUM(A, B)			(((A) < (B)) ? (A) : (B))
 #define MAXIMUM(A, B)			(((A) > (B)) ? (A) : (B))
 #define CLAMP(A, B, V)      MINIMUM(B, MAXIMUM(A, V))
 #define CLAMP01(V)				CLAMP(0.0F, 1.0F, V)
+#define TO_RADIANS(DEG)			((DEG) * (MATH_PI / 180.0F))
+#define TO_DEGREES(RAD)			((RAD) * (180.0F / MATH_PI))
 
 //
 // Utility Structs & Functions
@@ -47,6 +51,7 @@ typedef enum {
 float lerp(float a, float b, float t) { return (1.0f - t) * a + t * b; }
 
 typedef struct { float x, y; } V2;
+typedef struct { float x, y, z; } V3;
 typedef struct { float x, y, z, w; } V4;
 
 V2 v2(float x, float y) { return (V2) { x, y }; }
@@ -56,6 +61,13 @@ V2 v2mul(V2 a, float b) { return (V2) { a.x *b, a.y *b }; }
 float v2dot(V2 a, V2 b) { return a.x * b.x + a.y * b.y; }
 V2 v2lerp(V2 a, V2 b, float t) { return v2add(v2mul(a, 1.0f - t), v2mul(b, t)); }
 
+V3 v3(float x, float y, float z) { return (V3) { x, y, z }; }
+V3 v3add(V3 a, V3 b) { return (V3) { a.x + b.x, a.y + b.y, a.z + b.z }; }
+V3 v3sub(V3 a, V3 b) { return (V3) { a.x - b.x, a.y - b.y, a.z - b.z }; }
+V3 v3mul(V3 a, float b) { return (V3) { a.x *b, a.y *b, a.z *b }; }
+float v3dot(V3 a, V3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+V3 v3lerp(V3 a, V3 b, float t) { return v3add(v3mul(a, 1.0f - t), v3mul(b, t)); }
+
 V4 v4(float x, float y, float z, float w) { return (V4) { x, y, z, w }; }
 V4 v4add(V4 a, V4 b) { return (V4) { a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w }; }
 V4 v4sub(V4 a, V4 b) { return (V4) { a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w }; }
@@ -64,6 +76,17 @@ float v4dot(V4 a, V4 b) { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; 
 V4 v4lerp(V4 a, V4 b, float t) { return v4add(v4mul(a, 1.0f - t), v4mul(b, t)); }
 
 bool point_inside_rect(V2 p, V2 ra, V2 rb) { return (p.x > ra.x && p.x < rb.x) && (p.y > ra.y && p.y < rb.y); }
+
+int snprint_vector(char *buffer, int length, char *label, V4 v, uint32_t dim) {
+	switch (dim) {
+		case 1: return snprintf(buffer, (size_t)length, "%s: %.4f", label, v.x);
+		case 2: return snprintf(buffer, (size_t)length, "%s: v2 %.4f %.4f", label, v.x, v.y);
+		case 3: return snprintf(buffer, (size_t)length, "%s: v3 %.4f %.4f %.4f", label, v.x, v.y, v.z);
+		case 4: return snprintf(buffer, (size_t)length, "%s: v4 %.4f %.4f %.4f %.4f", label, v.x, v.y, v.z, v.w);
+	}
+
+	return snprintf(buffer, (size_t)length, "%s: null", label);
+}
 
 char *read_entire_file(const char *file) {
 	FILE *f = fopen(file, "rb");
@@ -85,6 +108,7 @@ typedef struct {
 } String;
 
 #define STRING(S) (String){ sizeof(S) - 1, S }
+#define MAKE_STRING(S) { sizeof(S) - 1, S }
 
 bool string_match(String a, String b) {
 	if (a.length != b.length) return false;
@@ -298,7 +322,6 @@ typedef enum {
 
 	TOKEN_KIND_PLUS,
 	TOKEN_KIND_MINUS,
-	TOKEN_KIND_EQUALS,
 	TOKEN_KIND_BRACKET_OPEN,
 	TOKEN_KIND_BRACKET_CLOSE,
 	TOKEN_KIND_MUL,
@@ -313,9 +336,9 @@ typedef enum {
 } Token_Kind;
 
 typedef struct {
-	Token_Kind	kind;
-	String		string;
-	double		number;
+	Token_Kind			kind;
+	String				string;
+	float				number;
 } Token;
 
 typedef struct {
@@ -390,7 +413,6 @@ void lexer_advance_token(Lexer *l) {
 			case '-': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_MINUS); return;
 			case '*': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_MUL); return;
 			case '/': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_DIV); return;
-			case '=': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_EQUALS); return;
 			case '(': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_BRACKET_OPEN); return;
 			case ')': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_BRACKET_CLOSE); return;
 			case ',': _lexer_consume_character(l); _lexer_make_token(l, TOKEN_KIND_COMMA); return;
@@ -399,7 +421,7 @@ void lexer_advance_token(Lexer *l) {
 			case '.': {
 				if (isdigit(b)) {
 					char *endptr = NULL;
-					double value = strtod(l->current, &endptr);
+					float value = strtof(l->current, &endptr);
 					if (l->current == endptr) {
 						_lexer_consume_character(l);
 						_lexer_make_token(l, TOKEN_KIND_PERIOD);
@@ -422,7 +444,7 @@ void lexer_advance_token(Lexer *l) {
 			default: {
 				if (isdigit(a)) {
 					char *endptr = NULL;
-					double value = strtod(l->current, &endptr);
+					float value = strtof(l->current, &endptr);
 					if (l->current != endptr) {
 						_lexer_consume_characters(l, endptr - l->current);
 						if (errno == ERANGE) {
@@ -462,6 +484,11 @@ typedef enum {
 	EXPR_KIND_UNARY_OPERATOR,
 	EXPR_KIND_BINARY_OPERATOR,
 
+	EXPR_KIND_VAR,
+	EXPR_KIND_CONST,
+	EXPR_KIND_ACTION,
+	EXPR_KIND_STATEMENT,
+
 	_EXPR_KIND_COUNT,
 } Expr_Kind;
 
@@ -471,12 +498,80 @@ typedef enum {
 	OP_KIND_MINUS = TOKEN_KIND_MINUS,
 	OP_KIND_DIV = TOKEN_KIND_DIV,
 	OP_KIND_MUL = TOKEN_KIND_MUL,
-	OP_KIND_EQUALS = TOKEN_KIND_EQUALS,
 	OP_KIND_PERIOD = TOKEN_KIND_PERIOD,
 	OP_KIND_COMMA = TOKEN_KIND_COMMA,
 	OP_KIND_COLON = TOKEN_KIND_COLON,
 	OP_KIND_BRACKET = TOKEN_KIND_BRACKET_CLOSE,
 } Op_Kind;
+
+static const String op_kind_string(Op_Kind op) {
+	switch (op) {
+		case OP_KIND_PLUS :return STRING(" + ");
+		case OP_KIND_MINUS :return STRING(" - ");
+		case OP_KIND_DIV :return STRING(" / ");
+		case OP_KIND_MUL :return STRING(" * ");
+		case OP_KIND_PERIOD :return STRING(" . ");
+		case OP_KIND_COMMA :return STRING(" , ");
+		case OP_KIND_COLON :return STRING(" : ");
+		case OP_KIND_BRACKET :return STRING(" () ");
+	}
+	return STRING(" null ");
+};
+
+typedef enum {
+	MICHI_ACTION_MOVE,
+	MICHI_ACTION_ROTATE,
+	MICHI_ACTION_ENLARGE,
+	MICHI_ACTION_CHANGE,
+	MICHI_ACTION_FOLLOW,
+	MICHI_ACTION_DISP,
+	MICHI_ACTION_EXIT,
+
+	_MICHI_ACTION_COUNT
+} Michi_Action;
+
+static const String michi_action_strings[_MICHI_ACTION_COUNT] = {
+	MAKE_STRING("move"), MAKE_STRING("rotate"),
+	MAKE_STRING("enlarge"), MAKE_STRING("change"),
+	MAKE_STRING("follow"), MAKE_STRING("disp"), 
+	MAKE_STRING("exit")
+};
+
+typedef enum {
+	MICHI_VAR_OUTPUT,
+	MICHI_VAR_ACTOR,
+	MICHI_VAR_SPEED,
+	MICHI_VAR_POSITION,
+	MICHI_VAR_ROTATION,
+	MICHI_VAR_SCALE,
+	MICHI_VAR_COLOR,
+	MICHI_VAR_X,
+	MICHI_VAR_Y,
+	MICHI_VAR_Z,
+	MICHI_VAR_W,
+
+	_MICHI_VAR_COUNT
+} Michi_Var;
+
+static const String michi_var_strings[_MICHI_VAR_COUNT] = {
+	MAKE_STRING("output"), MAKE_STRING("actor"), MAKE_STRING("speed"),
+	MAKE_STRING("position"), MAKE_STRING("rotation"),
+	MAKE_STRING("scale"), MAKE_STRING("color"),
+	MAKE_STRING("x"), MAKE_STRING("y"), MAKE_STRING("z"), MAKE_STRING("w")
+};
+
+typedef enum {
+	MICHI_CONST_ON,
+	MICHI_CONST_OFF,
+	MICHI_CONST_HELP,
+	MICHI_CONST_EXPR,
+
+	_MICHI_CONST_COUNT
+} Michi_Const;
+
+static const String michi_const_strings[_MICHI_CONST_COUNT] = {
+	MAKE_STRING("on"), MAKE_STRING("off"), MAKE_STRING("help"), MAKE_STRING("expr")
+};
 
 struct Expr;
 struct Expr {
@@ -486,7 +581,8 @@ struct Expr {
 
 	union {
 		struct {
-			double value;
+			V4 vector;
+			uint32_t vector_dim;
 		} number;
 
 		struct {
@@ -499,6 +595,29 @@ struct Expr {
 			struct Expr *left;
 			struct Expr *right;
 		} binary_op;
+
+		struct {
+			Michi_Var kind;
+			V4 vector;
+			uint32_t vector_dim;
+			float *ptr;
+			float *copy_ptr;
+		} var;
+
+		struct {
+			Michi_Const kind;
+			V4 vector;
+			uint32_t vector_dim;
+		} constant;
+
+		struct {
+			Michi_Action kind;
+		} action;
+
+		struct {
+			struct Expr *left;
+			struct Expr *right;
+		} statement;
 	};
 };
 typedef struct Expr Expr;
@@ -636,7 +755,6 @@ void parser_report_error(Parser *parser, String content, String message) {
 
 int token_op_precedence(Token_Kind op_kind) {
 	switch (op_kind) {
-		case TOKEN_KIND_EQUALS:
 		case TOKEN_KIND_COLON:
 			return 10;
 
@@ -651,6 +769,7 @@ int token_op_precedence(Token_Kind op_kind) {
 		case TOKEN_KIND_DIV:
 			return 90;
 
+		case TOKEN_KIND_PERIOD:
 		case TOKEN_KIND_BRACKET_OPEN:
 			return 100;
 	}
@@ -665,17 +784,15 @@ typedef enum {
 
 Associativity token_op_associativity(Token_Kind op_kind) {
 	switch (op_kind) {
-		case TOKEN_KIND_EQUALS:
 		case TOKEN_KIND_COLON:
-
 			return ASSOCIATIVITY_RL;
 
 		case TOKEN_KIND_PLUS:
 		case TOKEN_KIND_MINUS:
 		case TOKEN_KIND_MUL:
 		case TOKEN_KIND_DIV:
-		case TOKEN_KIND_PERIOD:
 		case TOKEN_KIND_COMMA:
+		case TOKEN_KIND_PERIOD:
 		case TOKEN_KIND_BRACKET_OPEN:
 			return ASSOCIATIVITY_LR;
 	}
@@ -683,11 +800,12 @@ Associativity token_op_associativity(Token_Kind op_kind) {
 	return ASSOCIATIVITY_RL;
 }
 
-Expr *expr_number_literal(Parser *parser, String content, double value) {
+Expr *expr_number_literal(Parser *parser, String content, V4 value, uint32_t dim) {
 	Expr *expr = expr_allocator_push(&parser->allocator);
 	expr->kind = EXPR_KIND_NUMBER_LITERAL;
 	expr->string = content;
-	expr->number.value = value;
+	expr->number.vector = value;
+	expr->number.vector_dim = dim;
 	return expr;
 }
 
@@ -717,6 +835,68 @@ Expr *expr_identifier(Parser *parser, String content) {
 	return expr;
 }
 
+Expr *expr_var(Parser *parser, String content, Michi_Var kind, V4 value, uint32_t dim, float *ptr, float *copy_ptr) {
+	Expr *expr = expr_allocator_push(&parser->allocator);
+	expr->kind = EXPR_KIND_VAR;
+	expr->string = content;
+	expr->var.kind = kind;
+	expr->var.vector = value;
+	expr->var.vector_dim = dim;
+	expr->var.ptr = ptr;
+	expr->var.copy_ptr = copy_ptr;
+	return expr;
+}
+
+Expr *expr_const(Parser *parser, String content, Michi_Const kind, V4 value, uint32_t dim) {
+	Expr *expr = expr_allocator_push(&parser->allocator);
+	expr->kind = EXPR_KIND_CONST;
+	expr->string = content;
+	expr->constant.kind = kind;
+	expr->constant.vector = value;
+	expr->constant.vector_dim = dim;
+	return expr;
+}
+
+Expr *expr_action(Parser *parser, String content, Michi_Action kind) {
+	Expr *expr = expr_allocator_push(&parser->allocator);
+	expr->kind = EXPR_KIND_ACTION;
+	expr->string = content;
+	expr->action.kind = kind;
+	return expr;
+}
+
+Expr *expr_statement(Parser *parser, String content, Expr *left, Expr *right) {
+	Expr *expr = expr_allocator_push(&parser->allocator);
+	expr->kind = EXPR_KIND_STATEMENT;
+	expr->string = content;
+	expr->statement.left = left;
+	expr->statement.right = right;
+	return expr;
+}
+
+bool expr_resolves_to_literal(Expr *expr) {
+	return (expr->kind == EXPR_KIND_NUMBER_LITERAL) ||
+		(expr->kind == EXPR_KIND_VAR && expr->var.vector_dim != 0) ||
+		(expr->kind == EXPR_KIND_CONST && expr->constant.vector_dim != 0);
+}
+
+V4 expr_resolve(Expr *expr, uint32_t *dim) {
+	switch (expr->kind) {
+		case EXPR_KIND_NUMBER_LITERAL: 
+			*dim = expr->number.vector_dim;
+			return expr->number.vector;
+		case EXPR_KIND_VAR:
+			*dim = expr->var.vector_dim;
+			return expr->var.vector;
+		case EXPR_KIND_CONST:
+			*dim = expr->constant.vector_dim;
+			return expr->constant.vector;
+	}
+
+	*dim = 0;
+	return v4(0, 0, 0, 0);
+}
+
 Expr *parse_expression(Parser *parser, int prec, Token_Kind expect);
 Expr *parse_subexpression(Parser *parser);
 
@@ -735,7 +915,7 @@ Expr *parse_subexpression(Parser *parser) {
 
 		case TOKEN_KIND_NUMBER_LITERAL: {
 			parser_consume_token(parser);
-			node = expr_number_literal(parser, token.string, token.number);
+			node = expr_number_literal(parser, token.string, v4(token.number, 0, 0, 0), 1);
 		} break;
 
 		case TOKEN_KIND_IDENTIFIER: {
@@ -779,7 +959,6 @@ Expr *parse_binary_operator(Parser *parser, Expr *left) {
 		case TOKEN_KIND_MUL: op = OP_KIND_MUL; break;
 		case TOKEN_KIND_DIV: op = OP_KIND_DIV; break;
 		case TOKEN_KIND_PERIOD: op = OP_KIND_PERIOD; break;
-		case TOKEN_KIND_EQUALS: op = OP_KIND_EQUALS; break;
 		case TOKEN_KIND_COMMA: op = OP_KIND_COMMA; break;
 		case TOKEN_KIND_COLON: op = OP_KIND_COLON; break;
 
@@ -816,7 +995,7 @@ Expr *parse_expression(Parser *parser, int prec, Token_Kind expect) {
 			Expr *op_node = parse_binary_operator(parser, a_node);
 
 			if (op_node->binary_op.right == NULL) {
-				op_node->binary_op.right = parse_expression(parser, expect, op_prec);
+				op_node->binary_op.right = parse_expression(parser, op_prec, expect);
 			}
 
 			a_node = op_node;
@@ -852,6 +1031,10 @@ Expr *parse(Parser *parser, char *text) {
 
 	parser->cursor = 0;
 
+	if (parser->tokens.tokens[0].kind == TOKEN_KIND_EOF) {
+		return parser_null_expr(parser);
+	}
+
 	return parse_expression(parser, -1, TOKEN_KIND_EOF);
 }
 
@@ -871,9 +1054,12 @@ typedef enum {
 
 	PANEL_COLOR_CODE_GENERAL,
 	PANEL_COLOR_CODE_ERROR,
+	PANEL_COLOR_COMPILE_ERROR,
 	PANEL_COLOR_CODE_NUMBER_LITERAL,
 	PANEL_COLOR_CODE_IDENTIFIER,
 	PANEL_COLOR_CODE_OPERATORS,
+
+	PANEL_COLOR_INFO,
 	
 	_PANEL_COLOR_COUNT,
 } Panel_Color;
@@ -888,6 +1074,7 @@ typedef struct {
 	double cursor_dsize;
 	V2 cursor_size[2];
 	V2 error_offset;
+	V2 info_offset;
 	V4 colors[_PANEL_COLOR_COUNT];
 } Panel_Style;
 
@@ -904,12 +1091,24 @@ typedef enum {
 	PANEL_STATE_TYPING,
 } Panel_State;
 
+typedef enum {
+	PANEL_DISP_HELP,
+	PANEL_DISP_EXPR,
+	PANEL_DISP_POSITION,
+	PANEL_DISP_ROTATION,
+	PANEL_DISP_SCALE,
+	PANEL_DISP_COLOR,
+	PANEL_DISP_SPEED,
+	PANEL_DISP_OUTPUT,
+
+	_PANEL_DISP_COUNT
+} Panel_Disp;
 
 struct Michi;
 typedef struct {
 	Panel_Style style;
 	Panel_Text_Input text_input;
-	Lexer lexer;
+	Parser parser;
 
 	Panel_State state;
 	float text_position_x_offset;
@@ -919,6 +1118,9 @@ typedef struct {
 	V2 cursor_size;
 	size_t error_cursor_index;
 	bool hovering;
+
+	bool disp[_PANEL_DISP_COUNT];
+	char scratch[1024];
 
 	struct Michi *michi;
 } Panel;
@@ -948,10 +1150,18 @@ struct Michi {
 	float size;
 	V2 position;
 	Actor actor;
+	bool follow;
 	Panel panel;
 	Parser parser;
+
+	V4 output;
+	uint32_t output_dim;
 };
 typedef struct Michi Michi;
+
+Expr *expr_evaluate_expression(Parser *parser, Expr *expr, Michi *michi);
+Expr *expr_evaluate_binary_operator(Parser *parser, Expr *expr, Michi *michi);
+bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi);
 
 typedef bool(*Panel_Styler)(Panel_Style *style);
 
@@ -975,6 +1185,7 @@ bool panel_default_styler(Panel_Style *style) {
 	style->cursor_size[0] = v2(2.0f, 0.7f * style->height);
 	style->cursor_size[1] = v2(0.5f * font_size, 0.7f * style->height);
 	style->error_offset = v2(10, 10);
+	style->info_offset = v2(10, -10);
 
 	style->colors[PANEL_COLOR_BACKGROUND] = v4(0.04f, 0.04f, 0.04f, 1.0f);
 	style->colors[PANEL_COLOR_INPUT_INDICATOR] = v4(0.2f, 0.6f, 0.6f, 1.0f);
@@ -984,10 +1195,13 @@ bool panel_default_styler(Panel_Style *style) {
 	style->colors[PANEL_COLOR_TEXT_INPUT_PLACEHOLDER] = v4(0.5, 0.5f, 0.5f, 1.0f);
 
 	style->colors[PANEL_COLOR_CODE_GENERAL] = v4(.8f, .8f, .9f, 1.f);
-	style->colors[PANEL_COLOR_CODE_ERROR] = v4(1.f, .3f, .3f, 1.f);
+	style->colors[PANEL_COLOR_CODE_ERROR] = v4(1.f, 1.f, .3f, 1.f);
+	style->colors[PANEL_COLOR_COMPILE_ERROR] = v4(1.f, .3f, .3f, 1.f);
 	style->colors[PANEL_COLOR_CODE_NUMBER_LITERAL] = v4(.3f, .3f, .8f, 1.f);
 	style->colors[PANEL_COLOR_CODE_IDENTIFIER] = v4(.3f, .9f, .3f, 1.f);
 	style->colors[PANEL_COLOR_CODE_OPERATORS] = v4(.8f, .8f, .3f, 1.f);
+
+	style->colors[PANEL_COLOR_INFO] = v4(1, 1, 1, 1);
 
 	return true;
 }
@@ -1099,6 +1313,18 @@ void panel_on_mouse_input(GLFWwindow *window, int button, int action, int mods) 
 	}
 }
 
+bool panel_set_cursor_on_error(Panel *panel, Parser *parser) {
+	if (parser->error_stream.count) {
+		if (panel->error_cursor_index >= parser->error_stream.count)
+			panel->error_cursor_index = 0;
+		size_t cursor = parser->error_stream.error[panel->error_cursor_index].content.data - panel->text_input.buffer;
+		panel->error_cursor_index += 1;
+		panel_set_cursor(panel, cursor);
+		return true;
+	}
+	return false;
+}
+
 void panel_on_key_input(GLFWwindow *window, int key, int scancode, int action, int mods) {
 	Panel *panel = glfwGetWindowUserPointer(window);
 
@@ -1116,13 +1342,27 @@ void panel_on_key_input(GLFWwindow *window, int key, int scancode, int action, i
 					case GLFW_KEY_END: panel_set_cursor(panel, panel->text_input.count); break;
 
 					case GLFW_KEY_TAB: {
-						Michi *michi = panel->michi;
-						if (michi->parser.error_stream.count) {
-							if (panel->error_cursor_index >= michi->parser.error_stream.count)
-								panel->error_cursor_index = 0;
-							size_t cursor = michi->parser.error_stream.error[panel->error_cursor_index].content.data - panel->text_input.buffer;
-							panel->error_cursor_index += 1;
-							panel_set_cursor(panel, cursor);
+						if (!panel_set_cursor_on_error(panel, &panel->parser)) {
+							panel_set_cursor_on_error(panel, &panel->michi->parser);
+						}
+					} break;
+
+					case GLFW_KEY_ENTER: {
+						Parser *parser = &panel->michi->parser;
+
+						panel->text_input.buffer[panel->text_input.count] = 0;
+						Expr *expr = parse(parser, panel->text_input.buffer);
+
+						if (!panel_set_cursor_on_error(panel, parser)) {
+							expr = expr_evaluate_expression(parser, expr, panel->michi);
+							if (!panel_set_cursor_on_error(panel, parser)) {
+								if (expr_type_check_and_execute(expr, parser, panel->michi)) {
+									panel->text_input.count = 0;
+									panel_set_cursor(panel, 0);
+								} else {
+									panel_set_cursor_on_error(panel, parser);
+								}
+							}
 						}
 					} break;
 				}
@@ -1156,6 +1396,8 @@ bool panel_create(Panel_Styler styler, Michi *michi, Panel *panel) {
 		return false;
 	}
 
+	parser_create(&panel->parser);
+
 	memset(&panel->text_input, 0, sizeof(panel->text_input));
 
 	panel->state = PANEL_STATE_IDEL;
@@ -1166,6 +1408,12 @@ bool panel_create(Panel_Styler styler, Michi *michi, Panel *panel) {
 	panel->cursor_size = panel->style.cursor_size[1];
 	panel->error_cursor_index = 0;
 	panel->hovering = false;
+
+	for (int i = 0; i < _PANEL_DISP_COUNT; ++i) {
+		panel->disp[i] = false;
+	}
+
+	panel->disp[PANEL_DISP_OUTPUT] = true;
 
 	panel->michi = michi;
 
@@ -1180,6 +1428,70 @@ void panel_update(Panel *panel, float dt) {
 
 	V2 cursor_target_size = ((panel->text_input.count != panel->text_input.cursor) ? panel->style.cursor_size[0] : panel->style.cursor_size[1]);
 	panel->cursor_size = v2lerp(panel->cursor_size, cursor_target_size, (float)(1.0f - pow(panel->style.cursor_dsize, dt)));
+}
+
+float panel_render_expr(Expr *expr, Panel *panel, V2 pos, V4 color, Font *font) {
+	switch (expr->kind) {
+		case EXPR_KIND_NONE: {
+			String text = STRING("Expr None");
+			render_font(font, pos, color, text.data, text.length);
+			return pos.y - 20;
+		} break;
+
+		case EXPR_KIND_NUMBER_LITERAL: {
+			int len = snprint_vector(panel->scratch, sizeof(panel->scratch), "Expr Number", expr->number.vector, expr->number.vector_dim);
+			render_font(font, pos, color, panel->scratch, len);
+			return pos.y - 20;
+		} break;
+
+		case EXPR_KIND_IDENTIFIER: {
+			String text = STRING("Expr Identifier: ");
+			float x = render_font(font, pos, color, text.data, text.length);
+			render_font(font, v2(x, pos.y), color, expr->string.data, expr->string.length);
+			return pos.y - 20;
+		} break;
+
+		case EXPR_KIND_UNARY_OPERATOR: {
+			String text = STRING("Expr Unary: ");
+			float x = render_font(font, pos, color, text.data, text.length);
+			String op = op_kind_string(expr->unary_op.kind);
+			render_font(font, v2(x, pos.y), color, op.data, op.length);
+			pos.y = panel_render_expr(expr->unary_op.child, panel, v2add(pos, v2(20, -20)), color, font);
+			return pos.y;
+		} break;
+
+		case EXPR_KIND_BINARY_OPERATOR: {
+			String text = STRING("Expr Binary: ");
+			float x = render_font(font, pos, color, text.data, text.length);
+			String op = op_kind_string(expr->binary_op.kind);
+			render_font(font, v2(x, pos.y), color, op.data, op.length);
+			pos.y = panel_render_expr(expr->binary_op.left, panel, v2add(pos, v2(20, -20)), color, font);
+			pos.y = panel_render_expr(expr->binary_op.right, panel, v2add(pos, v2(20, 0)), color, font);
+			return pos.y;
+		} break;
+	}
+
+	return pos.y;
+}
+
+V2 panel_render_error(Panel *panel, Parser *parser, V2 pos, V4 color) {
+	if (parser->error_stream.count) {
+		Font *font = &panel->style.font;
+
+		int len = 0;
+		float x_add = 0;
+
+		size_t count = parser->error_stream.count;
+		for (size_t index = 0; index < count; ++index) {
+			Parse_Error *error = &parser->error_stream.error[index];
+			len = snprintf(panel->scratch, sizeof(panel->scratch), "%d:", (int)(error->content.data - panel->text_input.buffer));
+			x_add = render_font(font, pos, color, panel->scratch, len);
+			render_font(font, v2add(pos, v2(x_add, 0)), color, error->message.data, error->message.length);
+			pos.y += font->size;
+		}
+	}
+
+	return pos;
 }
 
 void panel_render(Panel *panel) {
@@ -1221,18 +1533,19 @@ void panel_render(Panel *panel) {
 	glBindTexture(GL_TEXTURE_2D, panel->style.font.texture.id);
 	glBegin(GL_QUADS);
 
+	panel->text_input.buffer[panel->text_input.count] = 0;
+	Expr *expr = parse(&panel->parser, panel->text_input.buffer);
+
 	if (panel->state == PANEL_STATE_TYPING || text.length != 0) {
 		Panel_Style *style = &panel->style;
-		
-		panel->text_input.buffer[panel->text_input.count] = 0;
-		lexer_init(&panel->lexer, panel->text_input.buffer);
-
-		lexer_advance_token(&panel->lexer);
 
 		V4 text_color;
 		char *text_start = panel->text_input.buffer;
-		while (panel->lexer.token.kind != TOKEN_KIND_EOF) {
-			Token *token = &panel->lexer.token;
+
+		Token_Array *tokens = &panel->parser.tokens;
+		size_t token_counts = tokens->count;
+		for (size_t index = 0; index < token_counts; ++index) {
+			Token *token = tokens->tokens + index;
 			switch (token->kind) {
 				case TOKEN_KIND_ERROR: text_color = style->colors[PANEL_COLOR_CODE_ERROR]; break;
 				case TOKEN_KIND_NUMBER_LITERAL: text_color = style->colors[PANEL_COLOR_CODE_NUMBER_LITERAL]; break;
@@ -1240,7 +1553,6 @@ void panel_render(Panel *panel) {
 
 				case TOKEN_KIND_PLUS:
 				case TOKEN_KIND_MINUS:
-				case TOKEN_KIND_EQUALS:
 				case TOKEN_KIND_MUL:
 				case TOKEN_KIND_DIV:
 				case TOKEN_KIND_PERIOD:
@@ -1253,7 +1565,6 @@ void panel_render(Panel *panel) {
 			text_pos.x = render_font(&panel->style.font, text_pos, style->colors[PANEL_COLOR_CODE_GENERAL], text_start, token->string.data - text_start);
 			text_pos.x = render_font(&panel->style.font, text_pos, text_color, token->string.data, token->string.length);
 			text_start = token->string.data + token->string.length;
-			lexer_advance_token(&panel->lexer);
 		}
 
 		char *text_end = panel->text_input.buffer + panel->text_input.count;
@@ -1286,38 +1597,125 @@ void panel_render(Panel *panel) {
 
 	glDisable(GL_SCISSOR_TEST);
 
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, panel->style.font.texture.id);
+	glBegin(GL_QUADS);
+
 	if (panel->text_input.count) {
-		Michi *michi = panel->michi;
+		V2 pos = v2add(panel->style.error_offset, v2(0, panel->style.height));
+		pos = panel_render_error(panel, &panel->parser, pos, panel->style.colors[PANEL_COLOR_CODE_ERROR]);
+		panel_render_error(panel, &panel->michi->parser, pos, panel->style.colors[PANEL_COLOR_COMPILE_ERROR]);
+	}
 
-		panel->text_input.buffer[panel->text_input.count] = 0;
-		Expr *expr = parse(&michi->parser, michi->panel.text_input.buffer);
+	V2 info_pos = v2(panel->style.info_offset.x, panel->style.info_offset.y + (float)context.framebuffer_h - panel->style.font.size);
+	Font *font = &panel->style.font;
+	V4 info_color = panel->style.colors[PANEL_COLOR_INFO];
 
-		if (michi->parser.error_stream.count) {
-			glEnable(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, panel->style.font.texture.id);
-			glBegin(GL_QUADS);
+	if (panel->disp[PANEL_DISP_HELP]) {
+		// Actions
+		{
+			String title = STRING("Action: ");
+			String comma = STRING(", ");
+			V2 p = info_pos;
 
-			Font *font = &panel->style.font;
+			p.x = render_font(font, p, info_color, title.data, title.length);
 
-			char buff[50];
-			int len = 0;
-			float x_add = 0;
-			V4 error_color = panel->style.colors[PANEL_COLOR_CODE_ERROR];
-
-			V2 pos = v2add(panel->style.error_offset, v2(0, panel->style.height));
-			size_t count = michi->parser.error_stream.count;
-			for (size_t index = 0; index < count; ++index) {
-				Parse_Error *error = &michi->parser.error_stream.error[index];
-				len = snprintf(buff, 50, "%d:", (int)(error->content.data - panel->text_input.buffer));
-				x_add = render_font(font, pos, error_color, buff, len);
-				render_font(font, v2add(pos, v2(x_add, 0)), error_color, error->message.data, error->message.length);
-				pos.y += font->size;
+			for (int i = 0; i < _MICHI_ACTION_COUNT; ++i) {
+				String string = michi_action_strings[i];
+				p.x = render_font(font, p, info_color, string.data, string.length);
+				if (i != _MICHI_ACTION_COUNT - 1)
+					p.x = render_font(font, p, info_color, comma.data, comma.length);
 			}
+			info_pos.y -= font->size;
+		}
 
-			glEnd();
-			glDisable(GL_TEXTURE_2D);
+		// Variables
+		{
+			String title = STRING("Variables: ");
+			String comma = STRING(", ");
+			V2 p = info_pos;
+
+			p.x = render_font(font, p, info_color, title.data, title.length);
+
+			for (int i = 0; i < _MICHI_VAR_COUNT; ++i) {
+				String string = michi_var_strings[i];
+				p.x = render_font(font, p, info_color, string.data, string.length);
+				if (i != _MICHI_VAR_COUNT - 1)
+					p.x = render_font(font, p, info_color, comma.data, comma.length);
+			}
+			info_pos.y -= font->size;
+		}
+
+		// Constants
+		{
+			String title = STRING("Constants: ");
+			String comma = STRING(", ");
+			V2 p = info_pos;
+
+			p.x = render_font(font, p, info_color, title.data, title.length);
+
+			for (int i = 0; i < _MICHI_CONST_COUNT; ++i) {
+				String string = michi_const_strings[i];
+				p.x = render_font(font, p, info_color, string.data, string.length);
+				if (i != _MICHI_CONST_COUNT - 1)
+					p.x = render_font(font, p, info_color, comma.data, comma.length);
+			}
+			info_pos.y -= font->size;
 		}
 	}
+
+	Michi *michi = panel->michi;
+	if (panel->disp[PANEL_DISP_POSITION]) {
+		int len = snprintf(panel->scratch, sizeof(panel->scratch), "Position: %.4f, %.4f", 
+						   michi->actor.position.x, michi->actor.position.y);
+		render_font(font, info_pos, info_color, panel->scratch, len);
+		info_pos.y -= font->size;
+	}
+
+	if (panel->disp[PANEL_DISP_ROTATION]) {
+		int len = snprintf(panel->scratch, sizeof(panel->scratch), "Rotation: %.4f degs",
+						   michi->actor.rotation);
+		render_font(font, info_pos, info_color, panel->scratch, len);
+		info_pos.y -= font->size;
+	}
+
+	if (panel->disp[PANEL_DISP_SCALE]) {
+		int len = snprintf(panel->scratch, sizeof(panel->scratch), "Scale: %.4f, %.4f",
+						   michi->actor.scale.x, michi->actor.scale.y);
+		render_font(font, info_pos, info_color, panel->scratch, len);
+		info_pos.y -= font->size;
+	}
+
+	if (panel->disp[PANEL_DISP_COLOR]) {
+		int len = snprintf(panel->scratch, sizeof(panel->scratch), "Color: %.4f, %.4f, %.4f, %.4f",
+						   michi->actor.color.x, michi->actor.color.y, michi->actor.color.z, michi->actor.color.w);
+		render_font(font, info_pos, info_color, panel->scratch, len);
+		info_pos.y -= font->size;
+	}
+
+	if (panel->disp[PANEL_DISP_SPEED]) {
+		int len = snprintf(panel->scratch, sizeof(panel->scratch), "Speed: Position(%.4f), Rotation(%.4f), Scale(%.4f), Color(%.4f)",
+						   michi->actor.speed.position, michi->actor.speed.rotation, 
+						   michi->actor.speed.scale, michi->actor.speed.color);
+		render_font(font, info_pos, info_color, panel->scratch, len);
+		info_pos.y -= font->size;
+	}
+
+	if (panel->disp[PANEL_DISP_OUTPUT]) {
+		int len = snprint_vector(panel->scratch, sizeof(panel->scratch), "Output", michi->output, michi->output_dim);
+		render_font(font, info_pos, info_color, panel->scratch, len);
+		info_pos.y -= font->size;
+	}
+
+	if (panel->disp[PANEL_DISP_EXPR]) {
+		String title = STRING("Expr: ");
+		render_font(font, info_pos, info_color, title.data, title.length);
+		info_pos.y -= font->size;
+		panel_render_expr(expr, panel, v2add(info_pos, v2(font->size, 0)), info_color, font);
+	}
+
+	glEnd();
+	glDisable(GL_TEXTURE_2D);
 
 	glPopMatrix();
 }
@@ -1325,7 +1723,7 @@ void panel_render(Panel *panel) {
 void actor_render(Actor *actor) {
 	glPushMatrix();
 	glTranslatef(actor->position.x, actor->position.y, 0);
-	glRotatef(actor->rotation, 0, 0, -1);
+	glRotatef(TO_DEGREES(actor->rotation), 0, 0, -1);
 	glScalef(actor->scale.x, actor->scale.y, 1);
 
 	glColor4f(actor->color.x, actor->color.y, actor->color.z, actor->color.w);
@@ -1363,7 +1761,565 @@ bool michi_create(float size, Panel_Styler styler, Michi *michi) {
 	michi->actor.speed.scale = 0.5;
 	michi->actor.speed.color = 0.5;
 
+	michi->output = v4(0, 0, 0, 0);
+	michi->output_dim = 4;
+
+	michi->follow = false;
+
 	return true;
+}
+
+Expr *expr_evaluate_binary_operator(Parser *parser, Expr *expr, Michi *michi) {
+	if (expr->kind != EXPR_KIND_BINARY_OPERATOR || expr->binary_op.kind == OP_KIND_NULL) {
+		parser_report_error(parser, expr->string, STRING("Expected binary operator"));
+		return parser_null_expr(parser);
+	}
+
+	Expr *left = expr_evaluate_expression(parser, expr->binary_op.left, michi);
+	Expr *right = expr_evaluate_expression(parser, expr->binary_op.right, michi);
+
+	if (left->kind == EXPR_KIND_NONE || right->kind == EXPR_KIND_NONE)
+		return parser_null_expr(parser);
+
+	Expr *result = parser_null_expr(parser);
+
+	switch (expr->binary_op.kind) {
+		case OP_KIND_PLUS: {
+			if (!expr_resolves_to_literal(left)) {
+				parser_report_error(parser, left->string, STRING("Expected variable or literal"));
+				break;
+			}
+			if (!expr_resolves_to_literal(right)) {
+				parser_report_error(parser, left->string, STRING("Expected variable or literal"));
+				break;
+			}
+
+			uint32_t ld, rd;
+			V4 lv = expr_resolve(left, &ld);
+			V4 rv = expr_resolve(right, &rd);
+
+			if (ld == rd) {
+				result = expr_number_literal(parser, expr->string, v4add(lv, rv), ld);
+			} else {
+				parser_report_error(parser, left->string, STRING("Addition can not be performed on vectors with different dimension"));
+			}
+		} break;
+
+		case OP_KIND_MINUS: {
+			if (!expr_resolves_to_literal(left)) {
+				parser_report_error(parser, left->string, STRING("Expected variable or literal"));
+				break;
+			}
+			if (!expr_resolves_to_literal(right)) {
+				parser_report_error(parser, left->string, STRING("Expected variable or literal"));
+				break;
+			}
+
+			uint32_t ld, rd;
+			V4 lv = expr_resolve(left, &ld);
+			V4 rv = expr_resolve(right, &rd);
+
+			if (ld == rd) {
+				result = expr_number_literal(parser, expr->string, v4sub(lv, rv), ld);
+			} else {
+				parser_report_error(parser, left->string, STRING("Subtraction can not be performed on vectors with different dimension"));
+			}
+		} break;
+
+		case OP_KIND_DIV: {
+			if (!expr_resolves_to_literal(left)) {
+				parser_report_error(parser, left->string, STRING("Expected variable or literal"));
+				break;
+			}
+			if (!expr_resolves_to_literal(right)) {
+				parser_report_error(parser, left->string, STRING("Expected variable or literal"));
+				break;
+			}
+
+			uint32_t ld, rd;
+			V4 lv = expr_resolve(left, &ld);
+			V4 rv = expr_resolve(right, &rd);
+
+			if (rd == 1) {
+				result = expr_number_literal(parser, expr->string, v4mul(lv, 1.0f / rv.x), ld);
+			} else {
+				parser_report_error(parser, left->string, STRING("Division can not be performed by vector"));
+			}
+		} break;
+
+		case OP_KIND_MUL: {
+			if (!expr_resolves_to_literal(left)) {
+				parser_report_error(parser, left->string, STRING("Expected variable or literal"));
+				break;
+			}
+			if (!expr_resolves_to_literal(right)) {
+				parser_report_error(parser, left->string, STRING("Expected variable or literal"));
+				break;
+			}
+
+			uint32_t ld, rd;
+			V4 lv = expr_resolve(left, &ld);
+			V4 rv = expr_resolve(right, &rd);
+
+			if (rd == ld) {
+				result = expr_number_literal(parser, expr->string, v4(v4dot(lv, rv), 0, 0, 0), ld);
+			} else if (rd == 1) {
+				result = expr_number_literal(parser, expr->string, v4mul(lv, rv.x), ld);
+			} else if (ld == 1) {
+				result = expr_number_literal(parser, expr->string, v4mul(rv, lv.x), rd);
+			} else {
+				parser_report_error(parser, left->string, STRING("Invalid vectors for multiplication"));
+			}
+		} break;
+
+		case OP_KIND_PERIOD: {
+			if (left->kind != EXPR_KIND_VAR) {
+				parser_report_error(parser, left->string, STRING("Expected variable"));
+				break;
+			}
+			if (right->kind != EXPR_KIND_VAR) {
+				parser_report_error(parser, right->string, STRING("Expected variable"));
+				break;
+			}
+
+			switch (left->var.kind) {
+				case MICHI_VAR_OUTPUT: {
+					V4 out = michi->output;
+					float *ptr = (float *)&michi->output;
+					switch (right->var.kind) {
+						case MICHI_VAR_X: 
+							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out.x, 0, 0, 0), 1, ptr + 0, NULL);
+							break;
+						case MICHI_VAR_Y:
+							result = expr_var(parser, expr->string, MICHI_VAR_Y, v4(out.y, 0, 0, 0), 1, ptr + 1, NULL);
+							break;
+						case MICHI_VAR_Z:
+							result = expr_var(parser, expr->string, MICHI_VAR_Z, v4(out.z, 0, 0, 0), 1, ptr + 2, NULL);
+							break;
+						case MICHI_VAR_W:
+							result = expr_var(parser, expr->string, MICHI_VAR_W, v4(out.w, 0, 0, 0), 1, ptr + 3, NULL);
+							break;
+						default:
+							parser_report_error(parser, expr->string, STRING("Invalid member access"));
+							break;
+					}
+				} break;
+
+				case MICHI_VAR_ACTOR: {
+					switch (right->var.kind) {
+						case MICHI_VAR_POSITION: {
+							V2 out = michi->actor.position;
+							float *ptr = (float *)&michi->actor.position;
+							float *copy_ptr = (float *)&michi->actor.position_target;
+							result = expr_var(parser, expr->string, MICHI_VAR_POSITION, v4(out.x, out.y, 0, 0), 2, ptr, copy_ptr);
+						} break;
+						case MICHI_VAR_ROTATION: {
+							float out = michi->actor.rotation;
+							float *ptr = &michi->actor.rotation;
+							float *copy_ptr = &michi->actor.rotation_target;
+							result = expr_var(parser, expr->string, MICHI_VAR_ROTATION, v4(out, 0, 0, 0), 1, ptr, copy_ptr);
+						} break;
+						case MICHI_VAR_SCALE: {
+							V2 out = michi->actor.scale;
+							float *ptr = (float *)&michi->actor.scale;
+							float *copy_ptr = (float *)&michi->actor.scale_target;
+							result = expr_var(parser, expr->string, MICHI_VAR_SCALE, v4(out.x, out.y, 0, 0), 2, ptr, copy_ptr);
+						} break;
+						case MICHI_VAR_COLOR: {
+							V4 out = michi->actor.color;
+							float *ptr = (float *)&michi->actor.color;
+							float *copy_ptr = (float *)&michi->actor.color_target;
+							result = expr_var(parser, expr->string, MICHI_VAR_COLOR, v4(out.x, out.y, out.z, out.w), 4, ptr, copy_ptr);
+						} break;
+					}
+				} break;
+
+				case MICHI_VAR_SPEED: {
+					switch (right->var.kind) {
+						case MICHI_VAR_POSITION: {
+							float out = michi->actor.speed.position;
+							float *ptr = &michi->actor.speed.position;
+							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out, 0, 0, 0), 1, ptr, NULL);
+						} break;
+						case MICHI_VAR_ROTATION: {
+							float out = michi->actor.speed.rotation;
+							float *ptr = &michi->actor.speed.rotation;
+							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out, 0, 0, 0), 1, ptr, NULL);
+						} break;
+						case MICHI_VAR_SCALE: {
+							float out = michi->actor.speed.scale;
+							float *ptr = &michi->actor.speed.scale;
+							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out, 0, 0, 0), 1, ptr, NULL);
+						} break;
+						case MICHI_VAR_COLOR: {
+							float out = michi->actor.speed.color;
+							float *ptr = &michi->actor.speed.color;
+							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out, 0, 0, 0), 1, ptr, NULL);
+						} break;
+						default:
+							parser_report_error(parser, expr->string, STRING("Invalid member access"));
+							break;
+					}
+				} break;
+
+				case MICHI_VAR_POSITION:
+				case MICHI_VAR_SCALE:
+				case MICHI_VAR_COLOR: {
+					float *ptr = left->var.ptr;
+					float *copy_ptr = left->var.copy_ptr;
+					if (ptr == NULL) {
+						parser_report_error(parser, expr->string, STRING("Invalid identifier"));
+						break;
+					}
+
+					V4 out = left->var.vector;
+					uint32_t outd = left->var.vector_dim;
+
+					switch (right->var.kind) {
+						case MICHI_VAR_X:
+							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out.x, 0, 0, 0), 1, ptr + 0, copy_ptr ? copy_ptr + 0 : NULL);
+							break;
+						case MICHI_VAR_Y:
+							if (outd >= 2)
+								result = expr_var(parser, expr->string, MICHI_VAR_Y, v4(out.y, 0, 0, 0), 1, ptr + 1, copy_ptr ? copy_ptr + 1 : NULL);
+							else
+								parser_report_error(parser, expr->string, STRING("Invalid member access"));
+							break;
+						case MICHI_VAR_Z:
+							if (outd >= 3)
+								result = expr_var(parser, expr->string, MICHI_VAR_Z, v4(out.z, 0, 0, 0), 1, ptr + 2, copy_ptr ? copy_ptr + 2 : NULL);
+							else
+								parser_report_error(parser, expr->string, STRING("Invalid member access"));
+							break;
+						case MICHI_VAR_W:
+							if (outd == 4)
+								result = expr_var(parser, expr->string, MICHI_VAR_W, v4(out.w, 0, 0, 0), 1, ptr + 3, copy_ptr ? copy_ptr + 3 : NULL);
+							else
+								parser_report_error(parser, expr->string, STRING("Invalid member access"));
+							break;
+						default:
+							parser_report_error(parser, expr->string, STRING("Invalid member access"));
+							break;
+					}
+				} break;
+
+				case MICHI_VAR_ROTATION:
+				case MICHI_VAR_X:
+				case MICHI_VAR_Y:
+				case MICHI_VAR_Z:
+				case MICHI_VAR_W: {
+					parser_report_error(parser, expr->string, STRING("Invalid member access"));
+				} break;
+			}
+		} break;
+
+		case OP_KIND_COMMA: {
+			if (!expr_resolves_to_literal(left)) {
+				parser_report_error(parser, left->string, STRING("Expected variable or literal"));
+				break;
+			}
+			if (!expr_resolves_to_literal(right)) {
+				parser_report_error(parser, left->string, STRING("Expected variable or literal"));
+				break;
+			}
+
+			uint32_t ld, rd;
+			V4 lv = expr_resolve(left, &ld);
+			V4 rv = expr_resolve(right, &rd);
+
+			if (ld + rd <= 4) {
+				float vec[4] = { 0,0,0,0 };
+				for (uint32_t i = 0; i < ld; ++i) vec[i] = *((float *)&lv + i);
+				for (uint32_t i = 0; i < rd; ++i) vec[i + ld] = *((float *)&rv + i);
+				result = expr_number_literal(parser, expr->string, v4(vec[0], vec[1], vec[2], vec[3]), ld + rd);
+			} else {
+				parser_report_error(parser, expr->string, STRING("Vectors with dimension greater than 4 is not supported"));
+			}
+		} break;
+
+		case OP_KIND_COLON: {
+			if (left->kind != EXPR_KIND_ACTION && left->kind != EXPR_KIND_VAR) {
+				parser_report_error(parser, left->string, STRING("Expected action or variable"));
+				break;
+			}
+			if (!expr_resolves_to_literal(right) && right->kind != EXPR_KIND_VAR && right->kind != EXPR_KIND_CONST) {
+				parser_report_error(parser, right->string, STRING("Expected action or variable or constant"));
+				break;
+			}
+
+			result = expr_statement(parser, expr->string, left, right);
+		} break;
+	}
+
+	return result;
+}
+
+Expr *expr_evaluate_expression(Parser *parser, Expr *expr, Michi *michi) {
+	switch (expr->kind) {
+		case EXPR_KIND_VAR:
+		case EXPR_KIND_CONST:
+		case EXPR_KIND_ACTION:
+		case EXPR_KIND_STATEMENT:
+		case EXPR_KIND_NUMBER_LITERAL: 
+			return expr;
+
+		case EXPR_KIND_UNARY_OPERATOR: {
+			Expr *child = expr_evaluate_expression(parser, expr->unary_op.child, michi);
+
+			if (expr_resolves_to_literal(child)) {
+				uint32_t dim;
+				V4 out = expr_resolve(child, &dim);
+				switch (expr->unary_op.kind) {
+					case OP_KIND_MINUS:
+						return expr_number_literal(parser, expr->string, v4(-out.x, -out.y, -out.z, -out.w), dim);
+					case OP_KIND_PLUS:
+					case OP_KIND_BRACKET:
+						return expr_number_literal(parser, expr->string, out, dim);
+				}
+				return parser_null_expr(parser);
+			} else if (child->kind == EXPR_KIND_NONE) {
+				return parser_null_expr(parser);
+			} else {
+				parser_report_error(parser, child->string, STRING("Expected expression"));
+				return parser_null_expr(parser);
+			}
+		} break;
+
+		case EXPR_KIND_BINARY_OPERATOR:
+			return expr_evaluate_binary_operator(parser, expr, michi);
+
+		case EXPR_KIND_IDENTIFIER: {
+			// Action
+			for (int i = 0; i < _MICHI_ACTION_COUNT; ++i) {
+				if (string_match(expr->string, michi_action_strings[i])) {
+					return expr_action(parser, expr->string, (Michi_Action)i);
+				}
+			}
+
+			// Variable
+			for (int i = 0; i < _MICHI_VAR_COUNT; ++i) {
+				if (string_match(expr->string, michi_var_strings[i])) {
+					uint32_t dim = 0;
+					if (i == MICHI_VAR_OUTPUT)dim = michi->output_dim;
+					return expr_var(parser, expr->string, (Michi_Var)i, v4(0, 0, 0, 0), dim, NULL, NULL);
+				}
+			}
+
+			// Constants
+			for (int i = 0; i < _MICHI_CONST_COUNT; ++i) {
+				if (string_match(expr->string, michi_const_strings[i])) {
+					return expr_const(parser, expr->string, (Michi_Const)i, v4(0, 0, 0, 0), 0);
+				}
+			}
+
+			parser_report_error(parser, expr->string, STRING("Invalid identifier"));
+			return parser_null_expr(parser);
+		} break;
+	}
+
+	parser_report_error(parser, expr->string, STRING("Expected expression"));
+	return parser_null_expr(parser);
+}
+
+bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi) {
+	switch (expr->kind) {
+		case EXPR_KIND_NONE: {
+			return false;
+		} break;
+
+		case EXPR_KIND_NUMBER_LITERAL: {
+			michi->output = expr->number.vector;
+			michi->output_dim = expr->number.vector_dim;
+			return true;
+		} break;
+
+		case EXPR_KIND_VAR: {
+			if (expr->var.vector_dim == 0) {
+				parser_report_error(parser, expr->string, STRING("Invalid variable"));
+				return false;
+			}
+
+			michi->output = expr->var.vector;
+			michi->output_dim = expr->var.vector_dim;
+			return true;
+		} break;
+
+		case EXPR_KIND_ACTION: {
+			switch (expr->action.kind) {
+				case MICHI_ACTION_EXIT:
+					glfwSetWindowShouldClose(context.window, 1);
+					return true;
+
+				case MICHI_ACTION_MOVE:
+				case MICHI_ACTION_ROTATE:
+					parser_report_error(parser, expr->string, STRING("Expected vector1 argument"));
+					return false;
+				case MICHI_ACTION_ENLARGE:
+					parser_report_error(parser, expr->string, STRING("Expected vector1 or vector 2 argument"));
+					return false;
+				case MICHI_ACTION_CHANGE:
+					parser_report_error(parser, expr->string, STRING("Expected vector1, vector2, vector3 or vector4 argument"));
+					return false;
+				case MICHI_ACTION_FOLLOW:
+				case MICHI_ACTION_DISP:
+					parser_report_error(parser, expr->string, STRING("Expected 'on' or 'off' argument"));
+					return false;
+			}
+		} break;
+
+		case EXPR_KIND_STATEMENT: {
+			Expr *left = expr->statement.left;
+			Expr *right = expr->statement.right;
+
+			switch (left->kind) {
+				case EXPR_KIND_ACTION: {
+					if (left->action.kind == MICHI_ACTION_EXIT) {
+						parser_report_error(parser, left->string, STRING("Action takes no arguments"));
+						return false;
+					}
+
+					if (left->action.kind == MICHI_ACTION_FOLLOW) {
+						if (right->kind == EXPR_KIND_CONST) {
+							Michi_Const const_kind = right->constant.kind;
+							if (const_kind == MICHI_CONST_ON) {
+								michi->follow = true;
+								return true;
+							} else if (const_kind == MICHI_CONST_OFF) {
+								michi->follow = false;
+								return true;
+							}
+						}
+						parser_report_error(parser, right->string, STRING("Expected 'on' or 'off' argument"));
+						return false;
+					} else if (left->action.kind == MICHI_ACTION_DISP) {
+						if (right->kind == EXPR_KIND_CONST) {
+							Michi_Const const_kind = right->constant.kind;
+							if (const_kind == MICHI_CONST_HELP) {
+								michi->panel.disp[PANEL_DISP_HELP] = !michi->panel.disp[PANEL_DISP_HELP];
+								return true;
+							} else if (const_kind == MICHI_CONST_EXPR) {
+								michi->panel.disp[PANEL_DISP_EXPR] = !michi->panel.disp[PANEL_DISP_EXPR];
+								return true;
+							}
+						} else if (right->kind == EXPR_KIND_VAR) {
+							switch (right->var.kind) {
+								case MICHI_VAR_POSITION:
+									michi->panel.disp[PANEL_DISP_POSITION] = !michi->panel.disp[PANEL_DISP_POSITION];
+									return true;
+								case MICHI_VAR_ROTATION:
+									michi->panel.disp[PANEL_DISP_ROTATION] = !michi->panel.disp[PANEL_DISP_ROTATION];
+									return true;
+								case MICHI_VAR_SCALE:
+									michi->panel.disp[PANEL_DISP_SCALE] = !michi->panel.disp[PANEL_DISP_SCALE];
+									return true;
+								case MICHI_VAR_COLOR:
+									michi->panel.disp[PANEL_DISP_COLOR] = !michi->panel.disp[PANEL_DISP_COLOR];
+									return true;
+								case MICHI_VAR_SPEED:
+									michi->panel.disp[PANEL_DISP_SPEED] = !michi->panel.disp[PANEL_DISP_SPEED];
+									return true;
+								case MICHI_VAR_OUTPUT:
+									michi->panel.disp[PANEL_DISP_OUTPUT] = !michi->panel.disp[PANEL_DISP_OUTPUT];
+									return true;
+							}
+						}
+						parser_report_error(parser, right->string, STRING("Invalid option"));
+						return false;
+					}
+
+					if (!expr_resolves_to_literal(right)) {
+						parser_report_error(parser, right->string, STRING("Expected r-value resolving to vector"));
+						return false;
+					}
+
+					uint32_t dim;
+					V4 in = expr_resolve(right, &dim);
+
+					switch (left->action.kind) {
+						case MICHI_ACTION_MOVE: {
+							if (dim == 1) {
+								float angle = michi->actor.rotation;
+								float c = cosf(-angle);
+								float s = sinf(-angle);
+								V2 p = v2(0, 1);
+								V2 dir;
+								dir.x = p.x * c - p.y * s;
+								dir.y = p.x * s + p.y * c;
+								michi->actor.position_target = v2add(michi->actor.position_target, v2mul(dir, in.x));
+								return true;
+							}
+							parser_report_error(parser, expr->string, STRING("Expected vector1 argument"));
+							return false;
+						} break;
+						case MICHI_ACTION_ROTATE: {
+							if (dim == 1) {
+								michi->actor.rotation_target += TO_RADIANS(in.x);
+								return true;
+							}
+							parser_report_error(parser, expr->string, STRING("Expected vector1 argument"));
+							return false;
+						} break;
+						case MICHI_ACTION_ENLARGE: {
+							if (dim <= 2) {
+								memcpy(&michi->actor.scale_target, &in, sizeof(float) * dim);
+								return true;
+							}
+							parser_report_error(parser, expr->string, STRING("Expected vector1 or vector2 argument"));
+							return false;
+						} break;
+						case MICHI_ACTION_CHANGE: {
+							memcpy(&michi->actor.scale_target, &in, sizeof(float) * dim);
+							return true;
+						} break;
+					}
+				} break;
+
+				case EXPR_KIND_VAR: {
+					if (left->var.kind == MICHI_VAR_OUTPUT) {
+						if (expr_resolves_to_literal(right)) {
+							uint32_t dim;
+							V4 in = expr_resolve(right, &dim);
+							michi->output = in;
+							michi->output_dim = dim;
+							return true;
+						} else {
+							parser_report_error(parser, right->string, STRING("Expected r-value resolving to vector"));
+							return false;
+						}
+					}
+
+					if (left->var.vector_dim == 0) {
+						parser_report_error(parser, left->string, STRING("Invalid variable"));
+						return false;
+					}
+
+					if (expr_resolves_to_literal(right)) {
+						uint32_t dim;
+						V4 in = expr_resolve(right, &dim);
+						if (dim == left->var.vector_dim) {
+							memcpy(left->var.ptr, &in, sizeof(float) * dim);
+							if (left->var.copy_ptr)
+								memcpy(left->var.copy_ptr, &in, sizeof(float) * dim);
+							return true;
+						}
+						parser_report_error(parser, expr->string, STRING("Incompatible types"));
+						return false;
+					} else {
+						parser_report_error(parser, right->string, STRING("Expected r-value resolving to vector"));
+						return false;
+					}
+				} break;
+
+				default: {
+					parser_report_error(parser, left->string, STRING("Expected action or variable"));
+					return false;
+				} break;
+			}
+		} break;
+	}
+
+	parser_report_error(parser, expr->string, STRING("Expected literal, variable or statement"));
+	return false;
 }
 
 void michi_update(Michi *michi, float dt) {
@@ -1373,48 +2329,11 @@ void michi_update(Michi *michi, float dt) {
 	a->scale = v2lerp(a->scale, a->scale_target, 1.0f - powf(1.0f - a->speed.scale, dt));
 	a->color = v4lerp(a->color, a->color_target, 1.0f - powf(1.0f - a->speed.color, dt));
 
-	michi->position = v2lerp(michi->position, a->position, 1.0f - powf(1.0f - .99f, dt));
-
-	panel_update(&michi->panel, dt);
-}
-
-float michi_debug_render_expr(Expr *expr, V2 pos, Font *font) {
-	switch (expr->kind) {
-		case EXPR_KIND_NONE: {
-			String text = STRING("Expr None");
-			render_font(font, pos, v4(1, 1, 1, 1), text.data, text.length);
-			return pos.y - 20;
-		} break;
-
-		case EXPR_KIND_NUMBER_LITERAL: {
-			char buf[150];
-			int len = snprintf(buf, 150, "Expr Number %.3f", expr->number.value);
-			render_font(font, pos, v4(1, 1, 1, 1), buf, len);
-			return pos.y - 20;
-		} break;
-
-		case EXPR_KIND_IDENTIFIER: {
-			render_font(font, pos, v4(1, 1, 1, 1), expr->string.data, expr->string.length);
-			return pos.y - 20;
-		} break;
-
-		case EXPR_KIND_UNARY_OPERATOR: {
-			String text = STRING("Expr Unary");
-			render_font(font, pos, v4(1, 1, 1, 1), text.data, text.length);
-			pos.y = michi_debug_render_expr(expr->unary_op.child, v2add(pos, v2(20, -20)), font);
-			return pos.y;
-		} break;
-
-		case EXPR_KIND_BINARY_OPERATOR: {
-			String text = STRING("Expr Binary");
-			render_font(font, pos, v4(1, 1, 1, 1), text.data, text.length);
-			pos.y = michi_debug_render_expr(expr->binary_op.left, v2add(pos, v2(20, -20)), font);
-			pos.y = michi_debug_render_expr(expr->binary_op.right, v2add(pos, v2(20, 0)), font);
-			return pos.y;
-		} break;
+	if (michi->follow) {
+		michi->position = v2lerp(michi->position, a->position, 1.0f - powf(1.0f - .99f, dt));
 	}
 
-	return pos.y;
+	panel_update(&michi->panel, dt);
 }
 
 void michi_render(Michi *michi) {
