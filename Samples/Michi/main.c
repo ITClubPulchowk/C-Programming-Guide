@@ -601,6 +601,7 @@ struct Expr {
 			V4 vector;
 			uint32_t vector_dim;
 			float *ptr;
+			float *copy_ptr;
 		} var;
 
 		struct {
@@ -754,10 +755,10 @@ void parser_report_error(Parser *parser, String content, String message) {
 
 int token_op_precedence(Token_Kind op_kind) {
 	switch (op_kind) {
-		case TOKEN_KIND_COMMA:
+		case TOKEN_KIND_COLON:
 			return 10;
 
-		case TOKEN_KIND_COLON:
+		case TOKEN_KIND_COMMA:
 			return 15;
 
 		case TOKEN_KIND_PLUS:
@@ -834,7 +835,7 @@ Expr *expr_identifier(Parser *parser, String content) {
 	return expr;
 }
 
-Expr *expr_var(Parser *parser, String content, Michi_Var kind, V4 value, uint32_t dim, float *ptr) {
+Expr *expr_var(Parser *parser, String content, Michi_Var kind, V4 value, uint32_t dim, float *ptr, float *copy_ptr) {
 	Expr *expr = expr_allocator_push(&parser->allocator);
 	expr->kind = EXPR_KIND_VAR;
 	expr->string = content;
@@ -842,6 +843,7 @@ Expr *expr_var(Parser *parser, String content, Michi_Var kind, V4 value, uint32_
 	expr->var.vector = value;
 	expr->var.vector_dim = dim;
 	expr->var.ptr = ptr;
+	expr->var.copy_ptr = copy_ptr;
 	return expr;
 }
 
@@ -1886,16 +1888,16 @@ Expr *expr_evaluate_binary_operator(Parser *parser, Expr *expr, Michi *michi) {
 					float *ptr = (float *)&michi->output;
 					switch (right->var.kind) {
 						case MICHI_VAR_X: 
-							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out.x, 0, 0, 0), 1, ptr + 0);
+							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out.x, 0, 0, 0), 1, ptr + 0, NULL);
 							break;
 						case MICHI_VAR_Y:
-							result = expr_var(parser, expr->string, MICHI_VAR_Y, v4(out.y, 0, 0, 0), 1, ptr + 1);
+							result = expr_var(parser, expr->string, MICHI_VAR_Y, v4(out.y, 0, 0, 0), 1, ptr + 1, NULL);
 							break;
 						case MICHI_VAR_Z:
-							result = expr_var(parser, expr->string, MICHI_VAR_Z, v4(out.z, 0, 0, 0), 1, ptr + 2);
+							result = expr_var(parser, expr->string, MICHI_VAR_Z, v4(out.z, 0, 0, 0), 1, ptr + 2, NULL);
 							break;
 						case MICHI_VAR_W:
-							result = expr_var(parser, expr->string, MICHI_VAR_W, v4(out.w, 0, 0, 0), 1, ptr + 3);
+							result = expr_var(parser, expr->string, MICHI_VAR_W, v4(out.w, 0, 0, 0), 1, ptr + 3, NULL);
 							break;
 						default:
 							parser_report_error(parser, expr->string, STRING("Invalid member access"));
@@ -1908,22 +1910,26 @@ Expr *expr_evaluate_binary_operator(Parser *parser, Expr *expr, Michi *michi) {
 						case MICHI_VAR_POSITION: {
 							V2 out = michi->actor.position;
 							float *ptr = (float *)&michi->actor.position;
-							result = expr_var(parser, expr->string, MICHI_VAR_POSITION, v4(out.x, out.y, 0, 0), 2, ptr);
+							float *copy_ptr = (float *)&michi->actor.position_target;
+							result = expr_var(parser, expr->string, MICHI_VAR_POSITION, v4(out.x, out.y, 0, 0), 2, ptr, copy_ptr);
 						} break;
 						case MICHI_VAR_ROTATION: {
 							float out = michi->actor.rotation;
 							float *ptr = &michi->actor.rotation;
-							result = expr_var(parser, expr->string, MICHI_VAR_ROTATION, v4(out, 0, 0, 0), 1, ptr);
+							float *copy_ptr = &michi->actor.rotation_target;
+							result = expr_var(parser, expr->string, MICHI_VAR_ROTATION, v4(out, 0, 0, 0), 1, ptr, copy_ptr);
 						} break;
 						case MICHI_VAR_SCALE: {
 							V2 out = michi->actor.scale;
 							float *ptr = (float *)&michi->actor.scale;
-							result = expr_var(parser, expr->string, MICHI_VAR_SCALE, v4(out.x, out.y, 0, 0), 2, ptr);
+							float *copy_ptr = (float *)&michi->actor.scale_target;
+							result = expr_var(parser, expr->string, MICHI_VAR_SCALE, v4(out.x, out.y, 0, 0), 2, ptr, copy_ptr);
 						} break;
 						case MICHI_VAR_COLOR: {
 							V4 out = michi->actor.color;
 							float *ptr = (float *)&michi->actor.color;
-							result = expr_var(parser, expr->string, MICHI_VAR_COLOR, v4(out.x, out.y, out.z, out.w), 4, ptr);
+							float *copy_ptr = (float *)&michi->actor.color_target;
+							result = expr_var(parser, expr->string, MICHI_VAR_COLOR, v4(out.x, out.y, out.z, out.w), 4, ptr, copy_ptr);
 						} break;
 					}
 				} break;
@@ -1933,22 +1939,22 @@ Expr *expr_evaluate_binary_operator(Parser *parser, Expr *expr, Michi *michi) {
 						case MICHI_VAR_POSITION: {
 							float out = michi->actor.speed.position;
 							float *ptr = &michi->actor.speed.position;
-							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out, 0, 0, 0), 1, ptr);
+							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out, 0, 0, 0), 1, ptr, NULL);
 						} break;
 						case MICHI_VAR_ROTATION: {
 							float out = michi->actor.speed.rotation;
 							float *ptr = &michi->actor.speed.rotation;
-							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out, 0, 0, 0), 1, ptr);
+							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out, 0, 0, 0), 1, ptr, NULL);
 						} break;
 						case MICHI_VAR_SCALE: {
 							float out = michi->actor.speed.scale;
 							float *ptr = &michi->actor.speed.scale;
-							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out, 0, 0, 0), 1, ptr);
+							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out, 0, 0, 0), 1, ptr, NULL);
 						} break;
 						case MICHI_VAR_COLOR: {
 							float out = michi->actor.speed.color;
 							float *ptr = &michi->actor.speed.color;
-							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out, 0, 0, 0), 1, ptr);
+							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out, 0, 0, 0), 1, ptr, NULL);
 						} break;
 						default:
 							parser_report_error(parser, expr->string, STRING("Invalid member access"));
@@ -1960,6 +1966,7 @@ Expr *expr_evaluate_binary_operator(Parser *parser, Expr *expr, Michi *michi) {
 				case MICHI_VAR_SCALE:
 				case MICHI_VAR_COLOR: {
 					float *ptr = left->var.ptr;
+					float *copy_ptr = left->var.copy_ptr;
 					if (ptr == NULL) {
 						parser_report_error(parser, expr->string, STRING("Invalid identifier"));
 						break;
@@ -1970,23 +1977,23 @@ Expr *expr_evaluate_binary_operator(Parser *parser, Expr *expr, Michi *michi) {
 
 					switch (right->var.kind) {
 						case MICHI_VAR_X:
-							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out.x, 0, 0, 0), 1, ptr + 0);
+							result = expr_var(parser, expr->string, MICHI_VAR_X, v4(out.x, 0, 0, 0), 1, ptr + 0, copy_ptr ? copy_ptr + 0 : NULL);
 							break;
 						case MICHI_VAR_Y:
 							if (outd >= 2)
-								result = expr_var(parser, expr->string, MICHI_VAR_Y, v4(out.y, 0, 0, 0), 1, ptr + 1);
+								result = expr_var(parser, expr->string, MICHI_VAR_Y, v4(out.y, 0, 0, 0), 1, ptr + 1, copy_ptr ? copy_ptr + 1 : NULL);
 							else
 								parser_report_error(parser, expr->string, STRING("Invalid member access"));
 							break;
 						case MICHI_VAR_Z:
 							if (outd >= 3)
-								result = expr_var(parser, expr->string, MICHI_VAR_Z, v4(out.z, 0, 0, 0), 1, ptr + 2);
+								result = expr_var(parser, expr->string, MICHI_VAR_Z, v4(out.z, 0, 0, 0), 1, ptr + 2, copy_ptr ? copy_ptr + 2 : NULL);
 							else
 								parser_report_error(parser, expr->string, STRING("Invalid member access"));
 							break;
 						case MICHI_VAR_W:
 							if (outd == 4)
-								result = expr_var(parser, expr->string, MICHI_VAR_W, v4(out.w, 0, 0, 0), 1, ptr + 3);
+								result = expr_var(parser, expr->string, MICHI_VAR_W, v4(out.w, 0, 0, 0), 1, ptr + 3, copy_ptr ? copy_ptr + 3 : NULL);
 							else
 								parser_report_error(parser, expr->string, STRING("Invalid member access"));
 							break;
@@ -2094,7 +2101,7 @@ Expr *expr_evaluate_expression(Parser *parser, Expr *expr, Michi *michi) {
 				if (string_match(expr->string, michi_var_strings[i])) {
 					uint32_t dim = 0;
 					if (i == MICHI_VAR_OUTPUT)dim = michi->output_dim;
-					return expr_var(parser, expr->string, (Michi_Var)i, v4(0, 0, 0, 0), dim, NULL);
+					return expr_var(parser, expr->string, (Michi_Var)i, v4(0, 0, 0, 0), dim, NULL, NULL);
 				}
 			}
 
@@ -2291,6 +2298,8 @@ bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi) {
 						V4 in = expr_resolve(right, &dim);
 						if (dim == left->var.vector_dim) {
 							memcpy(left->var.ptr, &in, sizeof(float) * dim);
+							if (left->var.copy_ptr)
+								memcpy(left->var.copy_ptr, &in, sizeof(float) * dim);
 							return true;
 						}
 						parser_report_error(parser, expr->string, STRING("Incompatible types"));
