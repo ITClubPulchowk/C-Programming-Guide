@@ -31,19 +31,19 @@ Simple error messages are displayed. So, don't make hard errors.
 # Build 
 <br> 
 For windows : <br>
-Run ```build.bat``` 
+Run `build.bat` 
 <br>
 It will generate bin/ folder if it doesn't exist and put executable inside bin.
 <br>
-Run ```"bin\calculator.exe"``` or 
-```cd bin``` <br>
-```calculator.exe``` 
+Run `"bin\calculator.exe"` or 
+`cd bin` <br>
+`calculator.exe` 
 
 <br>
 <br>
 For linux : 
-<br> run ```chmod u+x build.sh``` to make it executable 
-<br> run ```./bin/calculator```
+<br> run `chmod u+x build.sh` to make it executable 
+<br> run `./bin/calculator`
 <br>
 
 
