@@ -993,7 +993,7 @@ Expr *parse_expression(Parser *parser, int prec, Token_Kind expect) {
 			Expr *op_node = parse_binary_operator(parser, a_node);
 
 			if (op_node->binary_op.right == NULL) {
-				op_node->binary_op.right = parse_expression(parser, expect, op_prec);
+				op_node->binary_op.right = parse_expression(parser, op_prec, expect);
 			}
 
 			a_node = op_node;
