@@ -1,5 +1,5 @@
 # Calculator
-This isn't even a calculator. It evaluates simple expression and supports following operator with given precedence : <br><br>
+This isn't even a full calculator. It evaluates simple expression and supports following operator with given precedence : <br><br>
 <pre>
 parenthesis     -> ( ) <br>
 unaray operator -> + - <br>
@@ -28,5 +28,23 @@ Simple error messages are displayed. So, don't make hard errors.
 <br>
 <br> Note : No color support for windows (>.<)
 <br>
+# Build 
+<br> 
+For windows : <br>
+Run ```build.bat``` 
+<br>
+It will generate bin/ folder if it doesn't exist and put executable inside bin.
+<br>
+Run ```"bin\calculator.exe"``` or 
+```cd bin``` <br>
+```calculator.exe``` 
+
+<br>
+<br>
+For linux : 
+<br> run ```chmod u+x build.sh``` to make it executable 
+<br> run ```./bin/calculator```
+<br>
+
 
 
