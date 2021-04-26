@@ -552,12 +552,13 @@ typedef enum {
 	MICHI_CONST_ON,
 	MICHI_CONST_OFF,
 	MICHI_CONST_HELP,
+	MICHI_CONST_EXPR,
 
 	_MICHI_CONST_COUNT
 } Michi_Const;
 
 static const String michi_const_strings[_MICHI_CONST_COUNT] = {
-	MAKE_STRING("on"), MAKE_STRING("off"), MAKE_STRING("help")
+	MAKE_STRING("on"), MAKE_STRING("off"), MAKE_STRING("help"), MAKE_STRING("expr")
 };
 
 struct Expr;
@@ -1014,7 +1015,7 @@ Expr *parse(Parser *parser, char *text) {
 
 	parser->cursor = 0;
 
-	if (parser->tokens.tokens[0].kind = TOKEN_KIND_EOF) {
+	if (parser->tokens.tokens[0].kind == TOKEN_KIND_EOF) {
 		return parser_null_expr(parser);
 	}
 
@@ -1080,6 +1081,7 @@ typedef enum {
 	PANEL_DISP_SCALE,
 	PANEL_DISP_COLOR,
 	PANEL_DISP_OUTPUT,
+	PANEL_DISP_EXPR,
 
 	_PANEL_DISP_COUNT
 } Panel_Disp;
@@ -1360,6 +1362,9 @@ bool panel_create(Panel_Styler styler, Michi *michi, Panel *panel) {
 		panel->disp[i] = false;
 	}
 
+	panel->disp[PANEL_DISP_OUTPUT] = true;
+	panel->disp[PANEL_DISP_EXPR] = true;
+
 	panel->michi = michi;
 
 	return true;
@@ -1373,6 +1378,46 @@ void panel_update(Panel *panel, float dt) {
 
 	V2 cursor_target_size = ((panel->text_input.count != panel->text_input.cursor) ? panel->style.cursor_size[0] : panel->style.cursor_size[1]);
 	panel->cursor_size = v2lerp(panel->cursor_size, cursor_target_size, (float)(1.0f - pow(panel->style.cursor_dsize, dt)));
+}
+
+float panel_render_expr(Expr *expr, Panel *panel, V2 pos, V4 color, Font *font) {
+	switch (expr->kind) {
+		case EXPR_KIND_NONE: {
+			String text = STRING("Expr None");
+			render_font(font, pos, color, text.data, text.length);
+			return pos.y - 20;
+		} break;
+
+		case EXPR_KIND_NUMBER_LITERAL: {
+			int len = snprint_vector(panel->scratch, sizeof(panel->scratch), "Expr Number", expr->number.vector, expr->number.vector_dim);
+			render_font(font, pos, color, panel->scratch, len);
+			return pos.y - 20;
+		} break;
+
+		case EXPR_KIND_IDENTIFIER: {
+			String text = STRING("Expr Identifier: ");
+			float x = render_font(font, pos, color, text.data, text.length);
+			render_font(font, v2add(pos, v2(x, 0)), v4(1, 1, 1, 1), expr->string.data, expr->string.length);
+			return pos.y - 20;
+		} break;
+
+		case EXPR_KIND_UNARY_OPERATOR: {
+			String text = STRING("Expr Unary: ");
+			render_font(font, pos, v4(1, 1, 1, 1), text.data, text.length);
+			pos.y = panel_render_expr(expr->unary_op.child, panel, v2add(pos, v2(20, -20)), color, font);
+			return pos.y;
+		} break;
+
+		case EXPR_KIND_BINARY_OPERATOR: {
+			String text = STRING("Expr Binary: ");
+			render_font(font, pos, v4(1, 1, 1, 1), text.data, text.length);
+			pos.y = panel_render_expr(expr->binary_op.left, panel, v2add(pos, v2(20, -20)), color, font);
+			pos.y = panel_render_expr(expr->binary_op.right, panel, v2add(pos, v2(20, 0)), color, font);
+			return pos.y;
+		} break;
+	}
+
+	return pos.y;
 }
 
 void panel_render(Panel *panel) {
@@ -1482,12 +1527,11 @@ void panel_render(Panel *panel) {
 	glBindTexture(GL_TEXTURE_2D, panel->style.font.texture.id);
 	glBegin(GL_QUADS);
 
+	Michi *michi = panel->michi;
+	panel->text_input.buffer[panel->text_input.count] = 0;
+	Expr *expr = parse(&michi->parser, michi->panel.text_input.buffer);
+
 	if (panel->text_input.count) {
-		Michi *michi = panel->michi;
-
-		panel->text_input.buffer[panel->text_input.count] = 0;
-		Expr *expr = parse(&michi->parser, michi->panel.text_input.buffer);
-
 		if (michi->parser.error_stream.count) {
 			Font *font = &panel->style.font;
 
@@ -1506,8 +1550,6 @@ void panel_render(Panel *panel) {
 			}
 		}
 	}
-
-	Michi *michi = panel->michi;
 
 	V2 info_pos = v2(panel->style.info_offset.x, panel->style.info_offset.y + (float)context.framebuffer_h - panel->style.font.size);
 	Font *font = &panel->style.font;
@@ -1598,6 +1640,13 @@ void panel_render(Panel *panel) {
 		int len = snprint_vector(panel->scratch, sizeof(panel->scratch), "Output", michi->output, michi->output_dim);
 		render_font(font, info_pos, info_color, panel->scratch, len);
 		info_pos.y -= font->size;
+	}
+
+	if (panel->disp[PANEL_DISP_EXPR]) {
+		String title = STRING("Expr: ");
+		render_font(font, info_pos, info_color, title.data, title.length);
+		info_pos.y -= font->size;
+		panel_render_expr(expr, panel, v2add(info_pos, v2(font->size, 0)), info_color, font);
 	}
 
 	glEnd();
@@ -2013,45 +2062,6 @@ void michi_update(Michi *michi, float dt) {
 	}
 
 	panel_update(&michi->panel, dt);
-}
-
-float michi_debug_render_expr(Expr *expr, V2 pos, Font *font) {
-	switch (expr->kind) {
-		case EXPR_KIND_NONE: {
-			String text = STRING("Expr None");
-			render_font(font, pos, v4(1, 1, 1, 1), text.data, text.length);
-			return pos.y - 20;
-		} break;
-
-		case EXPR_KIND_NUMBER_LITERAL: {
-			char buf[150];
-			int len = snprint_vector(buf, 150, "Expr Number", expr->number.vector, expr->number.vector_dim);
-			render_font(font, pos, v4(1, 1, 1, 1), buf, len);
-			return pos.y - 20;
-		} break;
-
-		case EXPR_KIND_IDENTIFIER: {
-			render_font(font, pos, v4(1, 1, 1, 1), expr->string.data, expr->string.length);
-			return pos.y - 20;
-		} break;
-
-		case EXPR_KIND_UNARY_OPERATOR: {
-			String text = STRING("Expr Unary");
-			render_font(font, pos, v4(1, 1, 1, 1), text.data, text.length);
-			pos.y = michi_debug_render_expr(expr->unary_op.child, v2add(pos, v2(20, -20)), font);
-			return pos.y;
-		} break;
-
-		case EXPR_KIND_BINARY_OPERATOR: {
-			String text = STRING("Expr Binary");
-			render_font(font, pos, v4(1, 1, 1, 1), text.data, text.length);
-			pos.y = michi_debug_render_expr(expr->binary_op.left, v2add(pos, v2(20, -20)), font);
-			pos.y = michi_debug_render_expr(expr->binary_op.right, v2add(pos, v2(20, 0)), font);
-			return pos.y;
-		} break;
-	}
-
-	return pos.y;
 }
 
 void michi_render(Michi *michi) {
