@@ -9,7 +9,7 @@ binary add/sub  -> + - <br>
 assignment      -> =   <br>
 </pre>
 <br>
-All are right assosciative except assignment operator.
+All operators are left assosciative except exponentiation ('^') operator.
 <br>
 <br>
 There's no support for comparison or any bitwise operator.
@@ -25,6 +25,8 @@ Simple error messages are displayed. So, don't make hard errors.
 	<img src="./includes/calc2.png">
 </p>
 <br>
+<br>
+<br> Note : No color support for windows (>.<)
 <br>
 
 
