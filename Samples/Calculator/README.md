@@ -8,47 +8,27 @@ mul / div       -> / * <br>
 binary add/sub  -> + - <br>
 assignment      -> =   <br>
 </pre>
-<br>
-All operators are left assosciative except exponentiation ('^') operator.
-<br>
-
-<br>
+All operators are left assosciative except exponentiation ('^') and assignment ('=') operator. <br>
 There's no support for comparison or any bitwise operator.
-<br>
-<p align="left">
-	<img src="./includes/calc1.png">
-</p>
-
-<br>
-Simple error messages are displayed. So, don't make hard errors.
-<br>
-<p align="left">
-	<img src="./includes/calc2.png">
-</p>
-<br>
-<br>
-<br> Note : No color support for windows (>.<)
-<br>
-<br>
+<img src="./includes/calc1.png"> <br>
+Simple error messages are displayed. So, don't make hard errors. <br>
+<img src="./includes/calc2.png">
+<br> Note : No color support for windows (>.<) <br>
 # Build 
-<br> 
-For windows : <br>
-build.bat
+### For windows : <br>
+`build.bat`
 <br>
 It will generate bin/ folder if it doesn't exist and put executable inside bin.
 <br>
-Run 
-<br> bin\calculator.exe  or
+Run<br> 
+`"bin\calculator.exe"`  or
 <br>
-cd bin <br>
-calculator.exe<br>
-
+`cd bin` <br>
+`calculator.exe`<br>
 <br>
 <br>
-For linux : 
-<br> run <br> chmod u+x build.sh <br> to make it executable 
-<br> run <br> ./bin/calculator
+### For linux : 
+<br> Execute <br> `chmod u+x build.sh`<br> to make it executable <br>
+Build using `./build.sh`
+<br> Run <br> `./bin/calculator`
 <br>
-
-
-
