@@ -5,4 +5,4 @@ if [ ! -d "./bin" ]; then
 fi
 
 
-cc -I./includes/ ./src/main.c ./src/regex.c ./src/parser.c ./src/symbol_table.c -I./includes ./src/token.c -lm -o calculator
+cc -I./includes/ ./src/main.c ./src/regex.c ./src/parser.c ./src/symbol_table.c -I./includes ./src/token.c -lm -o ./bin/calculator
