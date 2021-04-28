@@ -142,6 +142,97 @@ bool string_match(String a, String b) {
 	return memcmp(a.data, b.data, a.length) == 0;
 }
 
+uint32_t find_least_significant_set_bit(uint32_t value) {
+	for (uint32_t test = 0; test < 32; ++test) {
+		if (value & (1 << test)) {
+			return test;
+			break;
+		}
+	}
+	return 0;
+}
+
+unsigned char *load_bmp(const char *file, int *w, int *h) {
+	FILE *fp = fopen(file, "rb");
+	if (!fp) return NULL;
+
+	uint16_t file_type; uint32_t file_size; uint16_t reserved1; uint16_t reserved2; uint32_t bitmap_offset;
+	if (fread(&file_type, sizeof(file_type), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&file_size, sizeof(file_size), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&reserved1, sizeof(reserved1), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&reserved2, sizeof(reserved2), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&bitmap_offset, sizeof(bitmap_offset), 1, fp) != 1) { fclose(fp); return NULL; }
+
+	uint32_t size; int32_t width; int32_t height; uint16_t planes; uint16_t bits_per_pixel; uint32_t compression;
+	if (fread(&size, sizeof(size), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&width, sizeof(width), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&height, sizeof(height), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&planes, sizeof(planes), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&bits_per_pixel, sizeof(bits_per_pixel), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&compression, sizeof(compression), 1, fp) != 1) { fclose(fp); return NULL; }
+
+	uint32_t bitmap_size; int32_t h_res; int32_t v_res; uint32_t color_used; uint32_t colors_important;
+	if (fread(&bitmap_size, sizeof(bitmap_size), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&h_res, sizeof(h_res), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&v_res, sizeof(v_res), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&color_used, sizeof(color_used), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&colors_important, sizeof(colors_important), 1, fp) != 1) { fclose(fp); return NULL; }
+
+	uint32_t red_mask; uint32_t green_mask; uint32_t blue_mask;
+	if (fread(&red_mask, sizeof(red_mask), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&green_mask, sizeof(green_mask), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&blue_mask, sizeof(blue_mask), 1, fp) != 1) { fclose(fp); return NULL; }
+
+	uint32_t alpha_mask = ~(red_mask | green_mask | blue_mask);
+	if (red_mask == 0 || green_mask == 0 || blue_mask == 0 || alpha_mask == 0) {
+		fprintf(stderr, "Failed to load BMP(%s). Color format must be RGBA", file);
+		fclose(fp);
+		return NULL;
+	}
+
+	if (compression != 3) {
+		fprintf(stderr, "Failed to load BMP(%s). Compression is not supported", file);
+		fclose(fp);
+		return NULL;
+	}
+
+	if (bits_per_pixel != 32) {
+		fprintf(stderr, "Failed to load BMP(%s). Bits per pixel must be 32", file);
+		fclose(fp);
+		return NULL;
+	}
+
+	size_t pixels_size = sizeof(uint32_t) * width * height;
+	unsigned char *pixels = michi_malloc(pixels_size);
+	if (fread(pixels, pixels_size, 1, fp) != 1) {
+		fprintf(stderr, "Invalid BMP file");
+		michi_free(pixels);
+		fclose(fp);
+		return NULL;
+	}
+
+	fclose(fp);
+
+	uint32_t red_shift = find_least_significant_set_bit(red_mask);
+	uint32_t green_shift = find_least_significant_set_bit(green_mask);
+	uint32_t blue_shift = find_least_significant_set_bit(blue_mask);
+	uint32_t alpha_shift = find_least_significant_set_bit(alpha_mask);
+
+	uint32_t *dest = (uint32_t *)pixels;
+	for (int y = 0; y < height; ++y) {
+		for (int x = 0; x < width; ++x) {
+			uint32_t c = *dest;
+			*dest = ((((c >> alpha_shift) & 0xff) << 24) | (((c >> blue_shift) & 0xff) << 16) | 
+					 (((c >> green_shift) & 0xff) << 8) | (((c >> red_shift) & 0xff) << 0));
+			dest += 1;
+		}
+	}
+
+	*w = width;
+	*h = height;
+	return pixels;
+}
+
 //
 // Context
 //
@@ -176,6 +267,7 @@ bool context_create() {
 
 	glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
 	glfwWindowHint(GLFW_SAMPLES, 4);
+	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
 	context.window = glfwCreateWindow(800, 600, "Michi", NULL, NULL);
 	if (!context.window) {
@@ -183,7 +275,16 @@ bool context_create() {
 		return false;
 	}
 
+	GLFWimage icon;
+	icon.pixels = load_bmp("Logo.bmp", &icon.width, &icon.height);
+	if (icon.pixels) {
+		glfwSetWindowIcon(context.window, 1, &icon);
+	} else {
+		fprintf(stderr, "Failed to load icon (Logo.bmp)");
+	}
+
 	glfwMakeContextCurrent(context.window);
+	glfwShowWindow(context.window);
 
 	context.cursors[CURSOR_KIND_ARROW] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
 	context.cursors[CURSOR_KIND_IBEAM] = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
