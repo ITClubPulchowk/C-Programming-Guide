@@ -15,7 +15,7 @@ if "%1" neq "optimize" goto DoneConfig
 set MsBuildConfiguration=Release
 set CLFlags=-O2
 set CLANGFlags=-O2 -gcodeview
-set GCCFlags=-O2
+set GCCFlags=-O
 
 echo -------------------------------------
 echo Optimize Build configured
@@ -96,7 +96,7 @@ call xcopy "Logo.ico" bin\GccBuild /Y
 call xcopy "Logo.bmp" bin\GccBuild /Y
 pushd bin\GccBuild
 call windres -i %ResourceFileIn% -o resource.o
-call gcc -Wno-switch -Wno-pointer-sign -Wno-enum-conversion -D_CRT_SECURE_NO_WARNINGS -D_GLFW_WIN32 %GCCFlags% %SourceFiles% resource.o -o Michi.exe -luser32.lib -lgdi32.lib -lshell32.lib -lopengl32.lib
+call gcc -Wno-switch -Wno-pointer-sign -Wno-enum-conversion -D_CRT_SECURE_NO_WARNINGS -D_GLFW_WIN32 %GCCFlags% %SourceFiles% resource.o -o Michi.exe -luser32 -lgdi32 -lshell32 -lopengl32
 popd
 echo -------------------------------------
 goto Finished
