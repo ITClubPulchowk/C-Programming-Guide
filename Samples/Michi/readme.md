@@ -13,6 +13,20 @@
 * `disp: <position|rotation|scale|color|speed|output|help|expr>`
 * `exit`
 
+Example:
+```
+move: 50
+rotate: -90
+enlarge: 1, 2
+change: 1, 1, 0
+follow: on
+draw: off
+disp: expr
+disp: help
+disp: output
+exit
+```
+
 ### Variables
 * `output` - dynamic variable
 * `actor` - struct { position: vector2, rotation: float, scale: vector2, color: vector4 }
@@ -21,6 +35,14 @@
 ### Syntax for setting the variables
 ```
 variable: value
+```
+Example:
+```
+actor.position: 1, 2
+actor.position.x: 5
+actor.scale: 2, 2
+speed.position: 0.3
+actor.color: output.x, .3, .4
 ```
 
 ## Screenshot
