@@ -575,6 +575,7 @@ typedef enum {
 	MICHI_ACTION_ENLARGE,
 	MICHI_ACTION_CHANGE,
 	MICHI_ACTION_FOLLOW,
+	MICHI_ACTION_DRAW,
 	MICHI_ACTION_DISP,
 	MICHI_ACTION_EXIT,
 
@@ -584,8 +585,8 @@ typedef enum {
 static const String michi_action_strings[_MICHI_ACTION_COUNT] = {
 	MAKE_STRING("move"), MAKE_STRING("rotate"),
 	MAKE_STRING("enlarge"), MAKE_STRING("change"),
-	MAKE_STRING("follow"), MAKE_STRING("disp"), 
-	MAKE_STRING("exit")
+	MAKE_STRING("follow"), MAKE_STRING("draw"), 
+	MAKE_STRING("disp"), MAKE_STRING("exit")
 };
 
 typedef enum {
@@ -1232,6 +1233,7 @@ struct Michi {
 	V2 position;
 	Actor actor;
 	bool follow;
+	bool draw;
 	Panel panel;
 	Parser parser;
 
@@ -1791,6 +1793,10 @@ void panel_render(Panel *panel) {
 		len = snprintf(panel->scratch, sizeof(panel->scratch), "Stroke Count: %zu", panel->michi->strokes.count);
 		render_font(font, info_pos, info_color, panel->scratch, len);
 		info_pos.y -= font->size;
+		len = snprintf(panel->scratch, sizeof(panel->scratch), "Follow: %s, Draw: %s", 
+					   panel->michi->follow ? "on" : "off", panel->michi->draw ? "on" : "off");
+		render_font(font, info_pos, info_color, panel->scratch, len);
+		info_pos.y -= font->size;
 	}
 
 	if (panel->disp[PANEL_DISP_EXPR]) {
@@ -1853,10 +1859,10 @@ bool michi_create(float size, Panel_Styler styler, Michi *michi) {
 	michi->actor.scale_target = michi->actor.scale;
 	michi->actor.color_target = michi->actor.color;
 
-	michi->actor.speed.position = 0.5;
-	michi->actor.speed.rotation = 0.5;
-	michi->actor.speed.scale = 0.5;
-	michi->actor.speed.color = 0.5;
+	michi->actor.speed.position = 0.25f;
+	michi->actor.speed.rotation = 0.25f;
+	michi->actor.speed.scale = 0.25;
+	michi->actor.speed.color = 0.25;
 
 	michi->strokes.count = michi->strokes.allocated = 0;
 	michi->strokes.ptr = NULL;
@@ -1865,6 +1871,7 @@ bool michi_create(float size, Panel_Styler styler, Michi *michi) {
 	michi->output_dim = 4;
 
 	michi->follow = false;
+	michi->draw = true;
 
 	return true;
 }
@@ -2278,14 +2285,20 @@ bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi) {
 						return false;
 					}
 
-					if (left->action.kind == MICHI_ACTION_FOLLOW) {
+					if (left->action.kind == MICHI_ACTION_FOLLOW || left->action.kind == MICHI_ACTION_DRAW) {
 						if (right->kind == EXPR_KIND_CONST) {
 							Michi_Const const_kind = right->constant.kind;
 							if (const_kind == MICHI_CONST_ON) {
-								michi->follow = true;
+								if (left->action.kind == MICHI_ACTION_FOLLOW)
+									michi->follow = true;
+								else
+									michi->draw = true;
 								return true;
 							} else if (const_kind == MICHI_CONST_OFF) {
-								michi->follow = false;
+								if (left->action.kind == MICHI_ACTION_FOLLOW)
+									michi->follow = false;
+								else
+									michi->draw = false;
 								return true;
 							}
 						}
@@ -2433,10 +2446,12 @@ void michi_update(Michi *michi, float dt) {
 		michi->position = v2lerp(michi->position, a->position, 1.0f - powf(1.0f - .99f, dt));
 	}
 
-	V2 d = v2sub(a->position_target, a->position);
-	float adot = fabsf(v2dot(d, d));
-	if (adot > 1.0f) {
-		stroke_buffer_add(&michi->strokes, a->position, a->scale.x, a->scale.y, a->color);
+	if (michi->draw) {
+		V2 d = v2sub(a->position_target, a->position);
+		float adot = fabsf(v2dot(d, d));
+		if (adot > 1.0f) {
+			stroke_buffer_add(&michi->strokes, a->position, a->scale.x, a->scale.y, a->color);
+		}
 	}
 
 	panel_update(&michi->panel, dt);
