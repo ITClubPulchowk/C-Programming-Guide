@@ -15,6 +15,8 @@ echo --------------------------------------------------
 which clang &> /dev/null
 if [ $? == 0 ]; then
 	mkdir -p bin/CLANG
+	cp Stanberry.ttf bin/CLANG/ &> /dev/null
+	cp Logo.bmp bin/CLANG/ &> /dev/null
 	pushd bin/CLANG &> /dev/null
 	echo Compiling with CLANG...
 	clang $CompilerFlags -Wno-switch -Wno-pointer-sign -D_GLFW_X11 $SourceFiles -o Michi.out -ldl -lGL -lpthread -lm
@@ -28,6 +30,8 @@ echo --------------------------------------------------
 which gcc &> /dev/null
 if [ $? == 0 ]; then
 	mkdir -p bin/GCC
+	cp Stanberry.ttf bin/GCC/ &> /dev/null
+	cp Logo.bmp bin/GCC/ &> /dev/null
 	pushd bin/GCC &> /dev/null
 	echo Compiling with GCC...
 	gcc $CompilerFlags -Wno-switch -Wno-pointer-sign -Wno-unused-result -D_GLFW_X11 $SourceFiles -o Michi.out -ldl -lGL -lpthread -lm
