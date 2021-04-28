@@ -1,4 +1,19 @@
 /*
+ * Libraries
+ * glfw (https://www.glfw.org/)
+ * stb_truetype (https://github.com/nothings/stb/blob/master/stb_truetype.h)
+*/
+
+// Author: Ashish Bhattarai (Zero5620)
+
+/*
+ * Michi
+ * 'Michi' (道ーみち) means path. This program let's you control the actor by using commands that you enter in
+ * graphics console. It is also capable of displaying various internal information about the values and working
+ * of the system. For docomentation on various commands, check: https://github.com/IT-Club-Pulchowk/C-Programming-Guide/blob/main/Samples/Michi/readme.md
+*/
+
+/*
 * File Navigation
 * 
 * [Helper Macros]
