@@ -174,7 +174,11 @@
     <ClInclude Include="glfw\src\wgl_context.h" />
     <ClInclude Include="glfw\src\win32_joystick.h" />
     <ClInclude Include="glfw\src\win32_platform.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="stb_truetype.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="resource.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
