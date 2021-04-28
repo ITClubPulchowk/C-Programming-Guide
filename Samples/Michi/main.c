@@ -1220,7 +1220,7 @@ typedef struct {
 	V2 scale;
 	V4 color;
 
-	V2 position_target;
+	float move_distance;
 	float rotation_target;
 	V2 scale_target;
 	V4 color_target;
@@ -1854,7 +1854,7 @@ bool michi_create(float size, Panel_Styler styler, Michi *michi) {
 	michi->actor.scale = v2(4, 4);
 	michi->actor.color = v4(0, 1, 1, 1);
 
-	michi->actor.position_target = michi->actor.position;
+	michi->actor.move_distance = 0;
 	michi->actor.rotation_target = michi->actor.rotation;
 	michi->actor.scale_target = michi->actor.scale;
 	michi->actor.color_target = michi->actor.color;
@@ -2017,8 +2017,7 @@ Expr *expr_evaluate_binary_operator(Parser *parser, Expr *expr, Michi *michi) {
 						case MICHI_VAR_POSITION: {
 							V2 out = michi->actor.position;
 							float *ptr = (float *)&michi->actor.position;
-							float *copy_ptr = (float *)&michi->actor.position_target;
-							result = expr_var(parser, expr->string, MICHI_VAR_POSITION, v4(out.x, out.y, 0, 0), 2, ptr, copy_ptr);
+							result = expr_var(parser, expr->string, MICHI_VAR_POSITION, v4(out.x, out.y, 0, 0), 2, ptr, NULL);
 						} break;
 						case MICHI_VAR_ROTATION: {
 							float out = michi->actor.rotation;
@@ -2351,14 +2350,7 @@ bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi) {
 					switch (left->action.kind) {
 						case MICHI_ACTION_MOVE: {
 							if (dim == 1) {
-								float angle = michi->actor.rotation;
-								float c = cosf(-angle);
-								float s = sinf(-angle);
-								V2 p = v2(0, 1);
-								V2 dir;
-								dir.x = p.x * c - p.y * s;
-								dir.y = p.x * s + p.y * c;
-								michi->actor.position_target = v2add(michi->actor.position_target, v2mul(dir, in.x));
+								michi->actor.move_distance = in.x;
 								return true;
 							}
 							parser_report_error(parser, expr->string, STRING("Expected vector1 argument"));
@@ -2411,8 +2403,9 @@ bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi) {
 						V4 in = expr_resolve(right, &dim);
 						if (dim == left->var.vector_dim) {
 							memcpy(left->var.ptr, &in, sizeof(float) * dim);
-							if (left->var.copy_ptr)
-								memcpy(left->var.copy_ptr, &in, sizeof(float) * dim);
+							return true;
+						} else if (left->var.ptr == (float *)&michi->actor.position) {
+							michi->actor.move_distance = 0;
 							return true;
 						}
 						parser_report_error(parser, expr->string, STRING("Incompatible types"));
@@ -2437,7 +2430,18 @@ bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi) {
 
 void michi_update(Michi *michi, float dt) {
 	Actor *a = &michi->actor;
-	a->position = v2lerp(a->position, a->position_target, 1.0f - powf(1.0f - a->speed.position, dt));
+
+	float angle = michi->actor.rotation;
+	float c = cosf(-angle);
+	float s = sinf(-angle);
+	V2 p = v2(0, 1);
+	V2 dir;
+	dir.x = p.x * c - p.y * s;
+	dir.y = p.x * s + p.y * c;
+
+	float prev_move_distance = a->move_distance;
+	a->move_distance = lerp(a->move_distance, 0.0f, 1.0f - powf(1.0f - a->speed.position, dt));
+	a->position = v2add(a->position, v2mul(dir, prev_move_distance - a->move_distance));
 	a->rotation = lerp(a->rotation, a->rotation_target, 1.0f - powf(1.0f - a->speed.rotation, dt));
 	a->scale = v2lerp(a->scale, a->scale_target, 1.0f - powf(1.0f - a->speed.scale, dt));
 	a->color = v4lerp(a->color, a->color_target, 1.0f - powf(1.0f - a->speed.color, dt));
@@ -2447,9 +2451,7 @@ void michi_update(Michi *michi, float dt) {
 	}
 
 	if (michi->draw) {
-		V2 d = v2sub(a->position_target, a->position);
-		float adot = fabsf(v2dot(d, d));
-		if (adot > 1.0f) {
+		if (a->move_distance > 1.0f) {
 			stroke_buffer_add(&michi->strokes, a->position, a->scale.x, a->scale.y, a->color);
 		}
 	}
