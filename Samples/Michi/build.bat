@@ -95,7 +95,7 @@ call xcopy "resource.rc" bin\GccBuild /Y
 call xcopy "Logo.ico" bin\GccBuild /Y
 call xcopy "Logo.bmp" bin\GccBuild /Y
 pushd bin\GccBuild
-call windres -i %ResourceFileIn% -o resource.o
+call windres -i resource.h -o resource.o
 call gcc -Wno-switch -Wno-pointer-sign -Wno-enum-conversion -D_CRT_SECURE_NO_WARNINGS -D_GLFW_WIN32 %GCCFlags% %SourceFiles% resource.o -o Michi.exe -luser32.lib -lgdi32.lib -lshell32.lib -lopengl32.lib
 popd
 echo -------------------------------------
