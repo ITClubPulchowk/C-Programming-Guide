@@ -2403,9 +2403,11 @@ bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi) {
 						V4 in = expr_resolve(right, &dim);
 						if (dim == left->var.vector_dim) {
 							memcpy(left->var.ptr, &in, sizeof(float) * dim);
-							return true;
-						} else if (left->var.ptr == (float *)&michi->actor.position) {
-							michi->actor.move_distance = 0;
+							if (left->var.copy_ptr) {
+								memcpy(left->var.copy_ptr, &in, sizeof(float) * dim);
+							} else if (left->var.ptr == (float *)&michi->actor.position) {
+								michi->actor.move_distance = 0;
+							}
 							return true;
 						}
 						parser_report_error(parser, expr->string, STRING("Incompatible types"));
