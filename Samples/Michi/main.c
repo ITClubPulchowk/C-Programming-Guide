@@ -31,6 +31,7 @@
 #include <stdint.h>
 #include <ctype.h>
 #include <float.h>
+#include <errno.h>
 
 #include "glfw/include/GLFW/glfw3.h"
 
@@ -819,7 +820,7 @@ typedef struct {
 	size_t allocated;
 } Token_Array;
 
-inline size_t _array_get_grow_capacity(size_t c, size_t n) {
+size_t _array_get_grow_capacity(size_t c, size_t n) {
 	if (c) {
 		size_t geom = c + c / 2;
 		size_t new_capacity = c + n;
