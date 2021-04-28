@@ -41,8 +41,8 @@ Example:
 actor.position: 1, 2
 actor.position.x: 5
 actor.scale: 2, 2
-speed.position: 0.3
-actor.color: output.x, .3, .4
+speed.position: 0.3, 10
+actor.color: output.x, .3, .4, 1
 ```
 
 ## Screenshot
