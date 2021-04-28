@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <float.h>
 
 #include "glfw/include/GLFW/glfw3.h"
 
@@ -59,6 +60,7 @@ V2 v2add(V2 a, V2 b) { return (V2) { a.x + b.x, a.y + b.y }; }
 V2 v2sub(V2 a, V2 b) { return (V2) { a.x - b.x, a.y - b.y }; }
 V2 v2mul(V2 a, float b) { return (V2) { a.x *b, a.y *b }; }
 float v2dot(V2 a, V2 b) { return a.x * b.x + a.y * b.y; }
+bool v2null(V2 a) { return fabsf(v2dot(a, a)) <= FLT_EPSILON; }
 V2 v2lerp(V2 a, V2 b, float t) { return v2add(v2mul(a, 1.0f - t), v2mul(b, t)); }
 
 V3 v3(float x, float y, float z) { return (V3) { x, y, z }; }
@@ -66,6 +68,7 @@ V3 v3add(V3 a, V3 b) { return (V3) { a.x + b.x, a.y + b.y, a.z + b.z }; }
 V3 v3sub(V3 a, V3 b) { return (V3) { a.x - b.x, a.y - b.y, a.z - b.z }; }
 V3 v3mul(V3 a, float b) { return (V3) { a.x *b, a.y *b, a.z *b }; }
 float v3dot(V3 a, V3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+bool v3null(V3 a) { return fabsf(v3dot(a, a)) <= FLT_EPSILON; }
 V3 v3lerp(V3 a, V3 b, float t) { return v3add(v3mul(a, 1.0f - t), v3mul(b, t)); }
 
 V4 v4(float x, float y, float z, float w) { return (V4) { x, y, z, w }; }
@@ -73,6 +76,7 @@ V4 v4add(V4 a, V4 b) { return (V4) { a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w 
 V4 v4sub(V4 a, V4 b) { return (V4) { a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w }; }
 V4 v4mul(V4 a, float b) { return (V4) { a.x *b, a.y *b, a.z *b, a.w *b }; }
 float v4dot(V4 a, V4 b) { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
+bool v4null(V4 a) { return fabsf(v4dot(a, a)) <= FLT_EPSILON; }
 V4 v4lerp(V4 a, V4 b, float t) { return v4add(v4mul(a, 1.0f - t), v4mul(b, t)); }
 
 bool point_inside_rect(V2 p, V2 ra, V2 rb) { return (p.x > ra.x && p.x < rb.x) && (p.y > ra.y && p.y < rb.y); }
@@ -273,12 +277,59 @@ bool font_load(const char *file, float font_size, int bitmap_w, int bitmap_h, Fo
 // Rendering
 //
 
+#define MAX_CIRCLE_SEGMENTS 48
+
+static float im_unit_circle_cos[MAX_CIRCLE_SEGMENTS];
+static float im_unit_circle_sin[MAX_CIRCLE_SEGMENTS];
+
+void render_init() {
+	for (int i = 0; i < MAX_CIRCLE_SEGMENTS; ++i) {
+		float theta = ((float)i / (float)MAX_CIRCLE_SEGMENTS) * MATH_PI * 2;
+		im_unit_circle_cos[i] = cosf(theta);
+		im_unit_circle_sin[i] = sinf(theta);
+	}
+
+	im_unit_circle_cos[MAX_CIRCLE_SEGMENTS - 1] = 1;
+	im_unit_circle_sin[MAX_CIRCLE_SEGMENTS - 1] = 0;
+}
+
 void render_rect(V2 pos, V2 dim, V4 color) {
 	glColor4f(color.x, color.y, color.z, color.w);
 	glVertex2f(pos.x, pos.y);
 	glVertex2f(pos.x, pos.y + dim.y);
 	glVertex2f(pos.x + dim.x, pos.y + dim.y);
 	glVertex2f(pos.x + dim.x, pos.y);
+}
+
+void render_ellipse(V2 pos, float radius_a, float radius_b, V4 color, float factor) {
+	float r = color.x;
+	float g = color.y;
+	float b = color.z;
+	float a = color.w;
+	float af = factor * a;
+
+	float cx = pos.x;
+	float cy = pos.y;
+
+	int segments = MAX_CIRCLE_SEGMENTS;
+
+	float px = im_unit_circle_cos[0] * radius_a;
+	float py = im_unit_circle_sin[0] * radius_b;
+
+	float npx, npy;
+	for (int index = 1; index <= segments; ++index) {
+		int lookup = (int)(((float)index / (float)segments) * (MAX_CIRCLE_SEGMENTS - 1) + 0.5f);
+
+		npx = im_unit_circle_cos[lookup] * radius_a;
+		npy = im_unit_circle_sin[lookup] * radius_b;
+
+		glColor4f(r, g, b,  a); glVertex2f(cx, cy);
+		glColor4f(r, g, b, af); glVertex2f(cx + px, cy + py);
+		glColor4f(r, g, b, af); glVertex2f(cx + npx, cy + npy);
+
+		px = npx;
+		py = npy;
+	}
 }
 
 float render_font(Font *font, V2 pos, V4 color, const char *text, size_t len) {
@@ -1042,6 +1093,36 @@ Expr *parse(Parser *parser, char *text) {
 // Michi
 //
 
+typedef struct {
+	V2 p;
+	float ra;
+	float rb;
+	V4 c;
+} Stroke;
+
+typedef struct {
+	Stroke *ptr;
+	size_t count;
+	size_t allocated;
+} Stroke_Buffer;
+
+void stroke_buffer_add(Stroke_Buffer *buffer, V2 p, float ra, float rb, V4 c) {
+	if (buffer->count == buffer->allocated) {
+		buffer->allocated = _array_get_grow_capacity(buffer->allocated, 1);
+		buffer->ptr = realloc(buffer->ptr, sizeof(*buffer->ptr) * buffer->allocated);
+	}
+	Stroke *strk = buffer->ptr + buffer->count;
+	strk->p = p;
+	strk->ra = ra;
+	strk->rb = rb;
+	strk->c = c;
+	buffer->count += 1;
+}
+
+void stroke_buffer_clear(Stroke_Buffer *buffer) {
+	buffer->count = 0;
+}
+
 typedef enum {
 	PANEL_COLOR_BACKGROUND,
 	PANEL_COLOR_INPUT_INDICATOR,
@@ -1153,6 +1234,8 @@ struct Michi {
 	bool follow;
 	Panel panel;
 	Parser parser;
+
+	Stroke_Buffer strokes;
 
 	V4 output;
 	uint32_t output_dim;
@@ -1705,6 +1788,9 @@ void panel_render(Panel *panel) {
 		int len = snprint_vector(panel->scratch, sizeof(panel->scratch), "Output", michi->output, michi->output_dim);
 		render_font(font, info_pos, info_color, panel->scratch, len);
 		info_pos.y -= font->size;
+		len = snprintf(panel->scratch, sizeof(panel->scratch), "Stroke Count: %zu", panel->michi->strokes.count);
+		render_font(font, info_pos, info_color, panel->scratch, len);
+		info_pos.y -= font->size;
 	}
 
 	if (panel->disp[PANEL_DISP_EXPR]) {
@@ -1726,13 +1812,24 @@ void actor_render(Actor *actor) {
 	glRotatef(TO_DEGREES(actor->rotation), 0, 0, -1);
 	glScalef(actor->scale.x, actor->scale.y, 1);
 
-	glColor4f(actor->color.x, actor->color.y, actor->color.z, actor->color.w);
-
+	glPushMatrix();
+	glScalef(1.2f, 1.2f, 1);
+	glColor4f(1.0f - actor->color.x, 1.0f - actor->color.y, 1.0f - actor->color.z, actor->color.w);
 	glBegin(GL_TRIANGLES);
 	glVertex3f(-1, -1, 0);
 	glVertex3f(0, 1, 0);
 	glVertex3f(1, -1, 0);
 	glEnd();
+	glPopMatrix();
+
+	glColor4f(actor->color.x, actor->color.y, actor->color.z, actor->color.w);
+	glBegin(GL_TRIANGLES);
+	glVertex3f(-1, -1, 0);
+	glVertex3f(0, 1, 0);
+	glVertex3f(1, -1, 0);
+	glEnd();
+
+	glPopMatrix();
 }
 
 bool michi_create(float size, Panel_Styler styler, Michi *michi) {
@@ -1760,6 +1857,9 @@ bool michi_create(float size, Panel_Styler styler, Michi *michi) {
 	michi->actor.speed.rotation = 0.5;
 	michi->actor.speed.scale = 0.5;
 	michi->actor.speed.color = 0.5;
+
+	michi->strokes.count = michi->strokes.allocated = 0;
+	michi->strokes.ptr = NULL;
 
 	michi->output = v4(0, 0, 0, 0);
 	michi->output_dim = 4;
@@ -2333,6 +2433,12 @@ void michi_update(Michi *michi, float dt) {
 		michi->position = v2lerp(michi->position, a->position, 1.0f - powf(1.0f - .99f, dt));
 	}
 
+	V2 d = v2sub(a->position_target, a->position);
+	float adot = fabsf(v2dot(d, d));
+	if (adot > 1.0f) {
+		stroke_buffer_add(&michi->strokes, a->position, a->scale.x, a->scale.y, a->color);
+	}
+
 	panel_update(&michi->panel, dt);
 }
 
@@ -2346,6 +2452,18 @@ void michi_render(Michi *michi) {
 	glOrtho(-half_width, half_width, -half_height, half_height, -1, 1);
 
 	glTranslatef(-michi->position.x, -michi->position.y, 0);
+
+	{
+		glBegin(GL_TRIANGLES);
+
+		size_t count = michi->strokes.count;
+		Stroke *strk = michi->strokes.ptr;
+		for (size_t index = 0; index < count; ++index, ++strk) {
+			render_ellipse(strk->p, strk->ra, strk->rb, strk->c, 0);
+		}
+
+		glEnd();
+	}
 
 	actor_render(&michi->actor);
 
@@ -2369,6 +2487,8 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Failed to create Michi\n");
 		return -1;
 	}
+
+	render_init();
 
 	glfwSetWindowUserPointer(context.window, &michi->panel);
 	glfwSetCursorPosCallback(context.window, panel_on_cursor_pos_changed);
