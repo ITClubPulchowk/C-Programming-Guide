@@ -2268,7 +2268,7 @@ bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi) {
 							return false;
 						} break;
 						case MICHI_ACTION_CHANGE: {
-							memcpy(&michi->actor.scale_target, &in, sizeof(float) * dim);
+							memcpy(&michi->actor.color_target, &in, sizeof(float) * dim);
 							return true;
 						} break;
 					}
