@@ -63,6 +63,8 @@ creating a build file :
 
 - The build files should detect the compiler and properly tell the user if the compiler is not present in the system.
 - The build files should take input to all the variables required for the build process.
+- The default build file should output the executable in debug configuration (i.e. no optimization).
+- The build file should detect `optimize` flag and build optimized executable when the flag is passed to the build file.
 - The output of the files should be placed in directory `bin` relative to the local project directory.
 - All the bin directories (including object files) are to be ignored in the repo.
 

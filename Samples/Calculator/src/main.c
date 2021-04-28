@@ -59,7 +59,7 @@ int handle_return_type (stream* input_stream,return_type value)
 	
 	{
 	
-       	    string_copy(error_string, "   ERROR : Lvalue expected here .....\n");
+       	    string_copy(error_string, "   ERROR : Variable expected here .....\n");
 	    break;
 	}
 	
@@ -91,12 +91,12 @@ int handle_return_type (stream* input_stream,return_type value)
 	    string_copy(error_string, "    ERROR : Mod (prec. remainder) not defined for other types than INT\n");
 	    break;
 	case E_RPAREN :
-	    string_copy(error_string, "    \033[32mERROR : \033[33mUnexpected right parentheses ...\n");
+	    string_copy(error_string, "    ERROR : Unexpected right parentheses ...\n");
 	    break;	    
 	default :
 	    printf("This seems to be have not handled...");
 	}
-	printf("          %s\n",buffer);
+	printf("      %s\n",buffer);
 	printf("%s",error_string);
 
 	#elif __linux__
@@ -109,7 +109,7 @@ int handle_return_type (stream* input_stream,return_type value)
 	
 	{
 	
-       	    string_copy(error_string, "    \033[31mERROR : \033[33mLvalue expected here .....\n");
+       	    string_copy(error_string, "    \033[31mERROR : \033[33mVariable expected here .....\n");
 	    break;
 	}
 	

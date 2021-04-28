@@ -1,4 +1,19 @@
 /*
+ * Libraries
+ * glfw (https://www.glfw.org/)
+ * stb_truetype (https://github.com/nothings/stb/blob/master/stb_truetype.h)
+*/
+
+// Author: Ashish Bhattarai (Zero5620)
+
+/*
+ * Michi
+ * 'Michi' (道ーみち) means path. This program let's you control the actor by using commands that you enter in
+ * graphics console. It is also capable of displaying various internal information about the values and working
+ * of the system. For docomentation on various commands, check: https://github.com/IT-Club-Pulchowk/C-Programming-Guide/blob/main/Samples/Michi/readme.md
+*/
+
+/*
 * File Navigation
 * 
 * [Helper Macros]
@@ -15,6 +30,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <float.h>
 
 #include "glfw/include/GLFW/glfw3.h"
 
@@ -59,6 +75,7 @@ V2 v2add(V2 a, V2 b) { return (V2) { a.x + b.x, a.y + b.y }; }
 V2 v2sub(V2 a, V2 b) { return (V2) { a.x - b.x, a.y - b.y }; }
 V2 v2mul(V2 a, float b) { return (V2) { a.x *b, a.y *b }; }
 float v2dot(V2 a, V2 b) { return a.x * b.x + a.y * b.y; }
+bool v2null(V2 a) { return fabsf(v2dot(a, a)) <= FLT_EPSILON; }
 V2 v2lerp(V2 a, V2 b, float t) { return v2add(v2mul(a, 1.0f - t), v2mul(b, t)); }
 
 V3 v3(float x, float y, float z) { return (V3) { x, y, z }; }
@@ -66,6 +83,7 @@ V3 v3add(V3 a, V3 b) { return (V3) { a.x + b.x, a.y + b.y, a.z + b.z }; }
 V3 v3sub(V3 a, V3 b) { return (V3) { a.x - b.x, a.y - b.y, a.z - b.z }; }
 V3 v3mul(V3 a, float b) { return (V3) { a.x *b, a.y *b, a.z *b }; }
 float v3dot(V3 a, V3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+bool v3null(V3 a) { return fabsf(v3dot(a, a)) <= FLT_EPSILON; }
 V3 v3lerp(V3 a, V3 b, float t) { return v3add(v3mul(a, 1.0f - t), v3mul(b, t)); }
 
 V4 v4(float x, float y, float z, float w) { return (V4) { x, y, z, w }; }
@@ -73,6 +91,7 @@ V4 v4add(V4 a, V4 b) { return (V4) { a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w 
 V4 v4sub(V4 a, V4 b) { return (V4) { a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w }; }
 V4 v4mul(V4 a, float b) { return (V4) { a.x *b, a.y *b, a.z *b, a.w *b }; }
 float v4dot(V4 a, V4 b) { return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w; }
+bool v4null(V4 a) { return fabsf(v4dot(a, a)) <= FLT_EPSILON; }
 V4 v4lerp(V4 a, V4 b, float t) { return v4add(v4mul(a, 1.0f - t), v4mul(b, t)); }
 
 bool point_inside_rect(V2 p, V2 ra, V2 rb) { return (p.x > ra.x && p.x < rb.x) && (p.y > ra.y && p.y < rb.y); }
@@ -88,13 +107,36 @@ int snprint_vector(char *buffer, int length, char *label, V4 v, uint32_t dim) {
 	return snprintf(buffer, (size_t)length, "%s: null", label);
 }
 
+void michi_fatal_error(const char *message) {
+	fprintf(stderr, "Fatal error: %s\n", message);
+	exit(0);
+}
+
+void *michi_malloc(size_t size) {
+	void *ptr = malloc(size);
+	if (ptr)  return ptr;
+	michi_fatal_error("Out of memory - malloc() failed");
+	return NULL;
+}
+
+void *michi_realloc(void *old_ptr, size_t new_size) {
+	void *ptr = realloc(old_ptr, new_size);
+	if (ptr)  return ptr;
+	michi_fatal_error("Out of memory - remalloc() failed");
+	return NULL;
+}
+
+void michi_free(void *ptr) {
+	free(ptr);
+}
+
 char *read_entire_file(const char *file) {
 	FILE *f = fopen(file, "rb");
 	fseek(f, 0, SEEK_END);
 	long fsize = ftell(f);
 	fseek(f, 0, SEEK_SET);
 
-	char *string = malloc(fsize + 1);
+	char *string = michi_malloc(fsize + 1);
 	fread(string, 1, fsize, f);
 	fclose(f);
 
@@ -113,6 +155,97 @@ typedef struct {
 bool string_match(String a, String b) {
 	if (a.length != b.length) return false;
 	return memcmp(a.data, b.data, a.length) == 0;
+}
+
+uint32_t find_least_significant_set_bit(uint32_t value) {
+	for (uint32_t test = 0; test < 32; ++test) {
+		if (value & (1 << test)) {
+			return test;
+			break;
+		}
+	}
+	return 0;
+}
+
+unsigned char *load_bmp(const char *file, int *w, int *h) {
+	FILE *fp = fopen(file, "rb");
+	if (!fp) return NULL;
+
+	uint16_t file_type; uint32_t file_size; uint16_t reserved1; uint16_t reserved2; uint32_t bitmap_offset;
+	if (fread(&file_type, sizeof(file_type), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&file_size, sizeof(file_size), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&reserved1, sizeof(reserved1), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&reserved2, sizeof(reserved2), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&bitmap_offset, sizeof(bitmap_offset), 1, fp) != 1) { fclose(fp); return NULL; }
+
+	uint32_t size; int32_t width; int32_t height; uint16_t planes; uint16_t bits_per_pixel; uint32_t compression;
+	if (fread(&size, sizeof(size), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&width, sizeof(width), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&height, sizeof(height), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&planes, sizeof(planes), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&bits_per_pixel, sizeof(bits_per_pixel), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&compression, sizeof(compression), 1, fp) != 1) { fclose(fp); return NULL; }
+
+	uint32_t bitmap_size; int32_t h_res; int32_t v_res; uint32_t color_used; uint32_t colors_important;
+	if (fread(&bitmap_size, sizeof(bitmap_size), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&h_res, sizeof(h_res), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&v_res, sizeof(v_res), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&color_used, sizeof(color_used), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&colors_important, sizeof(colors_important), 1, fp) != 1) { fclose(fp); return NULL; }
+
+	uint32_t red_mask; uint32_t green_mask; uint32_t blue_mask;
+	if (fread(&red_mask, sizeof(red_mask), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&green_mask, sizeof(green_mask), 1, fp) != 1) { fclose(fp); return NULL; }
+	if (fread(&blue_mask, sizeof(blue_mask), 1, fp) != 1) { fclose(fp); return NULL; }
+
+	uint32_t alpha_mask = ~(red_mask | green_mask | blue_mask);
+	if (red_mask == 0 || green_mask == 0 || blue_mask == 0 || alpha_mask == 0) {
+		fprintf(stderr, "Failed to load BMP(%s). Color format must be RGBA", file);
+		fclose(fp);
+		return NULL;
+	}
+
+	if (compression != 3) {
+		fprintf(stderr, "Failed to load BMP(%s). Compression is not supported", file);
+		fclose(fp);
+		return NULL;
+	}
+
+	if (bits_per_pixel != 32) {
+		fprintf(stderr, "Failed to load BMP(%s). Bits per pixel must be 32", file);
+		fclose(fp);
+		return NULL;
+	}
+
+	size_t pixels_size = sizeof(uint32_t) * width * height;
+	unsigned char *pixels = michi_malloc(pixels_size);
+	if (fread(pixels, pixels_size, 1, fp) != 1) {
+		fprintf(stderr, "Invalid BMP file");
+		michi_free(pixels);
+		fclose(fp);
+		return NULL;
+	}
+
+	fclose(fp);
+
+	uint32_t red_shift = find_least_significant_set_bit(red_mask);
+	uint32_t green_shift = find_least_significant_set_bit(green_mask);
+	uint32_t blue_shift = find_least_significant_set_bit(blue_mask);
+	uint32_t alpha_shift = find_least_significant_set_bit(alpha_mask);
+
+	uint32_t *dest = (uint32_t *)pixels;
+	for (int y = 0; y < height; ++y) {
+		for (int x = 0; x < width; ++x) {
+			uint32_t c = *dest;
+			*dest = ((((c >> alpha_shift) & 0xff) << 24) | (((c >> blue_shift) & 0xff) << 16) | 
+					 (((c >> green_shift) & 0xff) << 8) | (((c >> red_shift) & 0xff) << 0));
+			dest += 1;
+		}
+	}
+
+	*w = width;
+	*h = height;
+	return pixels;
 }
 
 //
@@ -149,6 +282,7 @@ bool context_create() {
 
 	glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
 	glfwWindowHint(GLFW_SAMPLES, 4);
+	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
 	context.window = glfwCreateWindow(800, 600, "Michi", NULL, NULL);
 	if (!context.window) {
@@ -156,7 +290,16 @@ bool context_create() {
 		return false;
 	}
 
+	GLFWimage icon;
+	icon.pixels = load_bmp("Logo.bmp", &icon.width, &icon.height);
+	if (icon.pixels) {
+		glfwSetWindowIcon(context.window, 1, &icon);
+	} else {
+		fprintf(stderr, "Failed to load icon (Logo.bmp)");
+	}
+
 	glfwMakeContextCurrent(context.window);
+	glfwShowWindow(context.window);
 
 	context.cursors[CURSOR_KIND_ARROW] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
 	context.cursors[CURSOR_KIND_IBEAM] = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
@@ -241,11 +384,11 @@ bool font_load(const char *file, float font_size, int bitmap_w, int bitmap_h, Fo
 
 	int offset = stbtt_GetFontOffsetForIndex(data, 0);
 	if (!stbtt_InitFont(&info, data, offset)) {
-		free(data);
+		michi_free(data);
 		return false;
 	}
 
-	unsigned char *pixels = malloc(bitmap_w * bitmap_h);
+	unsigned char *pixels = michi_malloc(bitmap_w * bitmap_h);
 
 	stbtt_pack_context context;
 
@@ -264,8 +407,8 @@ bool font_load(const char *file, float font_size, int bitmap_w, int bitmap_h, Fo
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	free(pixels);
-	free(data);
+	michi_free(pixels);
+	michi_free(data);
 	return true;
 }
 
@@ -273,12 +416,59 @@ bool font_load(const char *file, float font_size, int bitmap_w, int bitmap_h, Fo
 // Rendering
 //
 
+#define MAX_CIRCLE_SEGMENTS 48
+
+static float im_unit_circle_cos[MAX_CIRCLE_SEGMENTS];
+static float im_unit_circle_sin[MAX_CIRCLE_SEGMENTS];
+
+void render_init() {
+	for (int i = 0; i < MAX_CIRCLE_SEGMENTS; ++i) {
+		float theta = ((float)i / (float)MAX_CIRCLE_SEGMENTS) * MATH_PI * 2;
+		im_unit_circle_cos[i] = cosf(theta);
+		im_unit_circle_sin[i] = sinf(theta);
+	}
+
+	im_unit_circle_cos[MAX_CIRCLE_SEGMENTS - 1] = 1;
+	im_unit_circle_sin[MAX_CIRCLE_SEGMENTS - 1] = 0;
+}
+
 void render_rect(V2 pos, V2 dim, V4 color) {
 	glColor4f(color.x, color.y, color.z, color.w);
 	glVertex2f(pos.x, pos.y);
 	glVertex2f(pos.x, pos.y + dim.y);
 	glVertex2f(pos.x + dim.x, pos.y + dim.y);
 	glVertex2f(pos.x + dim.x, pos.y);
+}
+
+void render_ellipse(V2 pos, float radius_a, float radius_b, V4 color, float factor) {
+	float r = color.x;
+	float g = color.y;
+	float b = color.z;
+	float a = color.w;
+	float af = factor * a;
+
+	float cx = pos.x;
+	float cy = pos.y;
+
+	int segments = MAX_CIRCLE_SEGMENTS;
+
+	float px = im_unit_circle_cos[0] * radius_a;
+	float py = im_unit_circle_sin[0] * radius_b;
+
+	float npx, npy;
+	for (int index = 1; index <= segments; ++index) {
+		int lookup = (int)(((float)index / (float)segments) * (MAX_CIRCLE_SEGMENTS - 1) + 0.5f);
+
+		npx = im_unit_circle_cos[lookup] * radius_a;
+		npy = im_unit_circle_sin[lookup] * radius_b;
+
+		glColor4f(r, g, b,  a); glVertex2f(cx, cy);
+		glColor4f(r, g, b, af); glVertex2f(cx + px, cy + py);
+		glColor4f(r, g, b, af); glVertex2f(cx + npx, cy + npy);
+
+		px = npx;
+		py = npy;
+	}
 }
 
 float render_font(Font *font, V2 pos, V4 color, const char *text, size_t len) {
@@ -524,6 +714,7 @@ typedef enum {
 	MICHI_ACTION_ENLARGE,
 	MICHI_ACTION_CHANGE,
 	MICHI_ACTION_FOLLOW,
+	MICHI_ACTION_DRAW,
 	MICHI_ACTION_DISP,
 	MICHI_ACTION_EXIT,
 
@@ -533,8 +724,8 @@ typedef enum {
 static const String michi_action_strings[_MICHI_ACTION_COUNT] = {
 	MAKE_STRING("move"), MAKE_STRING("rotate"),
 	MAKE_STRING("enlarge"), MAKE_STRING("change"),
-	MAKE_STRING("follow"), MAKE_STRING("disp"), 
-	MAKE_STRING("exit")
+	MAKE_STRING("follow"), MAKE_STRING("draw"), 
+	MAKE_STRING("disp"), MAKE_STRING("exit")
 };
 
 typedef enum {
@@ -641,7 +832,7 @@ inline size_t _array_get_grow_capacity(size_t c, size_t n) {
 void token_array_add(Token_Array *a, Token tok) {
 	if (a->count == a->allocated) {
 		a->allocated = _array_get_grow_capacity(a->allocated, 1);
-		a->tokens = realloc(a->tokens, sizeof(Token) * a->allocated);
+		a->tokens = michi_realloc(a->tokens, sizeof(Token) * a->allocated);
 	}
 	a->tokens[a->count] = tok;
 	a->count++;
@@ -672,9 +863,9 @@ Expr *expr_allocator_push(Expr_Allocator *allocator) {
 		allocator->count += 1;
 	} else {
 		allocator->allocated = _array_get_grow_capacity(allocator->allocated, 1);
-		allocator->buckets = realloc(allocator->buckets, sizeof(Expr_Bucket *) * allocator->allocated);
+		allocator->buckets = michi_realloc(allocator->buckets, sizeof(Expr_Bucket *) * allocator->allocated);
 		for (size_t index = allocator->count; index < allocator->allocated; ++index) {
-			allocator->buckets[index] = malloc(sizeof(Expr_Bucket));
+			allocator->buckets[index] = michi_malloc(sizeof(Expr_Bucket));
 			allocator->buckets[index]->used = 0;
 		}
 		buk = allocator->buckets[allocator->count];
@@ -708,7 +899,7 @@ typedef struct {
 void error_stream_add(Error_Stream *stream, String content, String message) {
 	if (stream->count == stream->allocated) {
 		stream->allocated = _array_get_grow_capacity(stream->allocated, 1);
-		stream->error = realloc(stream->error, sizeof(*stream->error) * stream->allocated);
+		stream->error = michi_realloc(stream->error, sizeof(*stream->error) * stream->allocated);
 	}
 	stream->error[stream->count] = (Parse_Error){ content, message };
 	stream->count += 1;
@@ -1042,6 +1233,36 @@ Expr *parse(Parser *parser, char *text) {
 // Michi
 //
 
+typedef struct {
+	V2 p;
+	float ra;
+	float rb;
+	V4 c;
+} Stroke;
+
+typedef struct {
+	Stroke *ptr;
+	size_t count;
+	size_t allocated;
+} Stroke_Buffer;
+
+void stroke_buffer_add(Stroke_Buffer *buffer, V2 p, float ra, float rb, V4 c) {
+	if (buffer->count == buffer->allocated) {
+		buffer->allocated = _array_get_grow_capacity(buffer->allocated, 1);
+		buffer->ptr = michi_realloc(buffer->ptr, sizeof(*buffer->ptr) * buffer->allocated);
+	}
+	Stroke *strk = buffer->ptr + buffer->count;
+	strk->p = p;
+	strk->ra = ra;
+	strk->rb = rb;
+	strk->c = c;
+	buffer->count += 1;
+}
+
+void stroke_buffer_clear(Stroke_Buffer *buffer) {
+	buffer->count = 0;
+}
+
 typedef enum {
 	PANEL_COLOR_BACKGROUND,
 	PANEL_COLOR_INPUT_INDICATOR,
@@ -1138,7 +1359,7 @@ typedef struct {
 	V2 scale;
 	V4 color;
 
-	V2 position_target;
+	float move_distance;
 	float rotation_target;
 	V2 scale_target;
 	V4 color_target;
@@ -1151,8 +1372,11 @@ struct Michi {
 	V2 position;
 	Actor actor;
 	bool follow;
+	bool draw;
 	Panel panel;
 	Parser parser;
+
+	Stroke_Buffer strokes;
 
 	V4 output;
 	uint32_t output_dim;
@@ -1258,6 +1482,7 @@ void panel_set_cursor_at_position(Panel *panel, float xpos) {
 void panel_start_typing(Panel *panel) {
 	panel->state = PANEL_STATE_TYPING;
 	panel->cursor_t = 0;
+	glfwFocusWindow(context.window);
 }
 
 void panel_stop_typing(Panel *panel) {
@@ -1705,6 +1930,13 @@ void panel_render(Panel *panel) {
 		int len = snprint_vector(panel->scratch, sizeof(panel->scratch), "Output", michi->output, michi->output_dim);
 		render_font(font, info_pos, info_color, panel->scratch, len);
 		info_pos.y -= font->size;
+		len = snprintf(panel->scratch, sizeof(panel->scratch), "Stroke Count: %zu", panel->michi->strokes.count);
+		render_font(font, info_pos, info_color, panel->scratch, len);
+		info_pos.y -= font->size;
+		len = snprintf(panel->scratch, sizeof(panel->scratch), "Follow: %s, Draw: %s", 
+					   panel->michi->follow ? "on" : "off", panel->michi->draw ? "on" : "off");
+		render_font(font, info_pos, info_color, panel->scratch, len);
+		info_pos.y -= font->size;
 	}
 
 	if (panel->disp[PANEL_DISP_EXPR]) {
@@ -1726,13 +1958,24 @@ void actor_render(Actor *actor) {
 	glRotatef(TO_DEGREES(actor->rotation), 0, 0, -1);
 	glScalef(actor->scale.x, actor->scale.y, 1);
 
-	glColor4f(actor->color.x, actor->color.y, actor->color.z, actor->color.w);
-
+	glPushMatrix();
+	glScalef(1.2f, 1.2f, 1);
+	glColor4f(1.0f - actor->color.x, 1.0f - actor->color.y, 1.0f - actor->color.z, actor->color.w);
 	glBegin(GL_TRIANGLES);
 	glVertex3f(-1, -1, 0);
 	glVertex3f(0, 1, 0);
 	glVertex3f(1, -1, 0);
 	glEnd();
+	glPopMatrix();
+
+	glColor4f(actor->color.x, actor->color.y, actor->color.z, actor->color.w);
+	glBegin(GL_TRIANGLES);
+	glVertex3f(-1, -1, 0);
+	glVertex3f(0, 1, 0);
+	glVertex3f(1, -1, 0);
+	glEnd();
+
+	glPopMatrix();
 }
 
 bool michi_create(float size, Panel_Styler styler, Michi *michi) {
@@ -1751,20 +1994,24 @@ bool michi_create(float size, Panel_Styler styler, Michi *michi) {
 	michi->actor.scale = v2(4, 4);
 	michi->actor.color = v4(0, 1, 1, 1);
 
-	michi->actor.position_target = michi->actor.position;
+	michi->actor.move_distance = 0;
 	michi->actor.rotation_target = michi->actor.rotation;
 	michi->actor.scale_target = michi->actor.scale;
 	michi->actor.color_target = michi->actor.color;
 
-	michi->actor.speed.position = 0.5;
-	michi->actor.speed.rotation = 0.5;
-	michi->actor.speed.scale = 0.5;
-	michi->actor.speed.color = 0.5;
+	michi->actor.speed.position = 0.25f;
+	michi->actor.speed.rotation = 0.25f;
+	michi->actor.speed.scale = 0.25;
+	michi->actor.speed.color = 0.25;
+
+	michi->strokes.count = michi->strokes.allocated = 0;
+	michi->strokes.ptr = NULL;
 
 	michi->output = v4(0, 0, 0, 0);
 	michi->output_dim = 4;
 
 	michi->follow = false;
+	michi->draw = true;
 
 	return true;
 }
@@ -1910,8 +2157,7 @@ Expr *expr_evaluate_binary_operator(Parser *parser, Expr *expr, Michi *michi) {
 						case MICHI_VAR_POSITION: {
 							V2 out = michi->actor.position;
 							float *ptr = (float *)&michi->actor.position;
-							float *copy_ptr = (float *)&michi->actor.position_target;
-							result = expr_var(parser, expr->string, MICHI_VAR_POSITION, v4(out.x, out.y, 0, 0), 2, ptr, copy_ptr);
+							result = expr_var(parser, expr->string, MICHI_VAR_POSITION, v4(out.x, out.y, 0, 0), 2, ptr, NULL);
 						} break;
 						case MICHI_VAR_ROTATION: {
 							float out = michi->actor.rotation;
@@ -2178,14 +2424,20 @@ bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi) {
 						return false;
 					}
 
-					if (left->action.kind == MICHI_ACTION_FOLLOW) {
+					if (left->action.kind == MICHI_ACTION_FOLLOW || left->action.kind == MICHI_ACTION_DRAW) {
 						if (right->kind == EXPR_KIND_CONST) {
 							Michi_Const const_kind = right->constant.kind;
 							if (const_kind == MICHI_CONST_ON) {
-								michi->follow = true;
+								if (left->action.kind == MICHI_ACTION_FOLLOW)
+									michi->follow = true;
+								else
+									michi->draw = true;
 								return true;
 							} else if (const_kind == MICHI_CONST_OFF) {
-								michi->follow = false;
+								if (left->action.kind == MICHI_ACTION_FOLLOW)
+									michi->follow = false;
+								else
+									michi->draw = false;
 								return true;
 							}
 						}
@@ -2238,14 +2490,7 @@ bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi) {
 					switch (left->action.kind) {
 						case MICHI_ACTION_MOVE: {
 							if (dim == 1) {
-								float angle = michi->actor.rotation;
-								float c = cosf(-angle);
-								float s = sinf(-angle);
-								V2 p = v2(0, 1);
-								V2 dir;
-								dir.x = p.x * c - p.y * s;
-								dir.y = p.x * s + p.y * c;
-								michi->actor.position_target = v2add(michi->actor.position_target, v2mul(dir, in.x));
+								michi->actor.move_distance = in.x;
 								return true;
 							}
 							parser_report_error(parser, expr->string, STRING("Expected vector1 argument"));
@@ -2268,7 +2513,7 @@ bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi) {
 							return false;
 						} break;
 						case MICHI_ACTION_CHANGE: {
-							memcpy(&michi->actor.scale_target, &in, sizeof(float) * dim);
+							memcpy(&michi->actor.color_target, &in, sizeof(float) * dim);
 							return true;
 						} break;
 					}
@@ -2298,8 +2543,11 @@ bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi) {
 						V4 in = expr_resolve(right, &dim);
 						if (dim == left->var.vector_dim) {
 							memcpy(left->var.ptr, &in, sizeof(float) * dim);
-							if (left->var.copy_ptr)
+							if (left->var.copy_ptr) {
 								memcpy(left->var.copy_ptr, &in, sizeof(float) * dim);
+							} else if (left->var.ptr == (float *)&michi->actor.position) {
+								michi->actor.move_distance = 0;
+							}
 							return true;
 						}
 						parser_report_error(parser, expr->string, STRING("Incompatible types"));
@@ -2324,13 +2572,30 @@ bool expr_type_check_and_execute(Expr *expr, Parser *parser, Michi *michi) {
 
 void michi_update(Michi *michi, float dt) {
 	Actor *a = &michi->actor;
-	a->position = v2lerp(a->position, a->position_target, 1.0f - powf(1.0f - a->speed.position, dt));
+
+	float angle = michi->actor.rotation;
+	float c = cosf(-angle);
+	float s = sinf(-angle);
+	V2 p = v2(0, 1);
+	V2 dir;
+	dir.x = p.x * c - p.y * s;
+	dir.y = p.x * s + p.y * c;
+
+	float prev_move_distance = a->move_distance;
+	a->move_distance = lerp(a->move_distance, 0.0f, 1.0f - powf(1.0f - a->speed.position, dt));
+	a->position = v2add(a->position, v2mul(dir, prev_move_distance - a->move_distance));
 	a->rotation = lerp(a->rotation, a->rotation_target, 1.0f - powf(1.0f - a->speed.rotation, dt));
 	a->scale = v2lerp(a->scale, a->scale_target, 1.0f - powf(1.0f - a->speed.scale, dt));
 	a->color = v4lerp(a->color, a->color_target, 1.0f - powf(1.0f - a->speed.color, dt));
 
 	if (michi->follow) {
 		michi->position = v2lerp(michi->position, a->position, 1.0f - powf(1.0f - .99f, dt));
+	}
+
+	if (michi->draw) {
+		if (a->move_distance > 1.0f) {
+			stroke_buffer_add(&michi->strokes, a->position, a->scale.x, a->scale.y, a->color);
+		}
 	}
 
 	panel_update(&michi->panel, dt);
@@ -2347,6 +2612,18 @@ void michi_render(Michi *michi) {
 
 	glTranslatef(-michi->position.x, -michi->position.y, 0);
 
+	{
+		glBegin(GL_TRIANGLES);
+
+		size_t count = michi->strokes.count;
+		Stroke *strk = michi->strokes.ptr;
+		for (size_t index = 0; index < count; ++index, ++strk) {
+			render_ellipse(strk->p, strk->ra, strk->rb, strk->c, 0);
+		}
+
+		glEnd();
+	}
+
 	actor_render(&michi->actor);
 
 	glPopMatrix();
@@ -2359,7 +2636,7 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 
-	Michi *michi = malloc(sizeof(Michi));
+	Michi *michi = michi_malloc(sizeof(Michi));
 	if (michi == NULL) {
 		fprintf(stderr, "Out of memory!\n");
 		return -1;
@@ -2369,6 +2646,8 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Failed to create Michi\n");
 		return -1;
 	}
+
+	render_init();
 
 	glfwSetWindowUserPointer(context.window, &michi->panel);
 	glfwSetCursorPosCallback(context.window, panel_on_cursor_pos_changed);
