@@ -14,7 +14,7 @@ set GCCFlags=-Od
 if "%1" neq "optimize" goto DoneConfig
 set MsBuildConfiguration=Release
 set CLFlags=-O2
-set CLANGFlags=-O2 -g-codeview
+set CLANGFlags=-O2 -gcodeview
 set GCCFlags=-O2
 
 echo -------------------------------------
