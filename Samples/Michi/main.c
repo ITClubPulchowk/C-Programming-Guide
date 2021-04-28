@@ -92,13 +92,36 @@ int snprint_vector(char *buffer, int length, char *label, V4 v, uint32_t dim) {
 	return snprintf(buffer, (size_t)length, "%s: null", label);
 }
 
+void michi_fatal_error(const char *message) {
+	fprintf(stderr, "Fatal error: %s\n", message);
+	exit(0);
+}
+
+void *michi_malloc(size_t size) {
+	void *ptr = malloc(size);
+	if (ptr)  return ptr;
+	michi_fatal_error("Out of memory - malloc() failed");
+	return NULL;
+}
+
+void *michi_realloc(void *old_ptr, size_t new_size) {
+	void *ptr = realloc(old_ptr, new_size);
+	if (ptr)  return ptr;
+	michi_fatal_error("Out of memory - remalloc() failed");
+	return NULL;
+}
+
+void michi_free(void *ptr) {
+	free(ptr);
+}
+
 char *read_entire_file(const char *file) {
 	FILE *f = fopen(file, "rb");
 	fseek(f, 0, SEEK_END);
 	long fsize = ftell(f);
 	fseek(f, 0, SEEK_SET);
 
-	char *string = malloc(fsize + 1);
+	char *string = michi_malloc(fsize + 1);
 	fread(string, 1, fsize, f);
 	fclose(f);
 
@@ -245,11 +268,11 @@ bool font_load(const char *file, float font_size, int bitmap_w, int bitmap_h, Fo
 
 	int offset = stbtt_GetFontOffsetForIndex(data, 0);
 	if (!stbtt_InitFont(&info, data, offset)) {
-		free(data);
+		michi_free(data);
 		return false;
 	}
 
-	unsigned char *pixels = malloc(bitmap_w * bitmap_h);
+	unsigned char *pixels = michi_malloc(bitmap_w * bitmap_h);
 
 	stbtt_pack_context context;
 
@@ -268,8 +291,8 @@ bool font_load(const char *file, float font_size, int bitmap_w, int bitmap_h, Fo
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	free(pixels);
-	free(data);
+	michi_free(pixels);
+	michi_free(data);
 	return true;
 }
 
@@ -693,7 +716,7 @@ inline size_t _array_get_grow_capacity(size_t c, size_t n) {
 void token_array_add(Token_Array *a, Token tok) {
 	if (a->count == a->allocated) {
 		a->allocated = _array_get_grow_capacity(a->allocated, 1);
-		a->tokens = realloc(a->tokens, sizeof(Token) * a->allocated);
+		a->tokens = michi_realloc(a->tokens, sizeof(Token) * a->allocated);
 	}
 	a->tokens[a->count] = tok;
 	a->count++;
@@ -724,9 +747,9 @@ Expr *expr_allocator_push(Expr_Allocator *allocator) {
 		allocator->count += 1;
 	} else {
 		allocator->allocated = _array_get_grow_capacity(allocator->allocated, 1);
-		allocator->buckets = realloc(allocator->buckets, sizeof(Expr_Bucket *) * allocator->allocated);
+		allocator->buckets = michi_realloc(allocator->buckets, sizeof(Expr_Bucket *) * allocator->allocated);
 		for (size_t index = allocator->count; index < allocator->allocated; ++index) {
-			allocator->buckets[index] = malloc(sizeof(Expr_Bucket));
+			allocator->buckets[index] = michi_malloc(sizeof(Expr_Bucket));
 			allocator->buckets[index]->used = 0;
 		}
 		buk = allocator->buckets[allocator->count];
@@ -760,7 +783,7 @@ typedef struct {
 void error_stream_add(Error_Stream *stream, String content, String message) {
 	if (stream->count == stream->allocated) {
 		stream->allocated = _array_get_grow_capacity(stream->allocated, 1);
-		stream->error = realloc(stream->error, sizeof(*stream->error) * stream->allocated);
+		stream->error = michi_realloc(stream->error, sizeof(*stream->error) * stream->allocated);
 	}
 	stream->error[stream->count] = (Parse_Error){ content, message };
 	stream->count += 1;
@@ -1110,7 +1133,7 @@ typedef struct {
 void stroke_buffer_add(Stroke_Buffer *buffer, V2 p, float ra, float rb, V4 c) {
 	if (buffer->count == buffer->allocated) {
 		buffer->allocated = _array_get_grow_capacity(buffer->allocated, 1);
-		buffer->ptr = realloc(buffer->ptr, sizeof(*buffer->ptr) * buffer->allocated);
+		buffer->ptr = michi_realloc(buffer->ptr, sizeof(*buffer->ptr) * buffer->allocated);
 	}
 	Stroke *strk = buffer->ptr + buffer->count;
 	strk->p = p;
@@ -1343,6 +1366,7 @@ void panel_set_cursor_at_position(Panel *panel, float xpos) {
 void panel_start_typing(Panel *panel) {
 	panel->state = PANEL_STATE_TYPING;
 	panel->cursor_t = 0;
+	glfwFocusWindow(context.window);
 }
 
 void panel_stop_typing(Panel *panel) {
@@ -2496,7 +2520,7 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 
-	Michi *michi = malloc(sizeof(Michi));
+	Michi *michi = michi_malloc(sizeof(Michi));
 	if (michi == NULL) {
 		fprintf(stderr, "Out of memory!\n");
 		return -1;
