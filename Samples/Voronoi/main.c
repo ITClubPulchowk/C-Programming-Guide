@@ -601,7 +601,7 @@ void insert_vonoroi_point(Vonoroi *v, v2 point) {
 
 Vonoroi construct_vonoroi(void) {
   v2 initial_point = {INITIAL_SITE_X, INITIAL_SITE_Y};
-  Vonoroi von = {};
+  Vonoroi von = {0};
 
   arrsetcap(von.point_render_buffer, 256);
   arrpush(von.sites, initial_point);
