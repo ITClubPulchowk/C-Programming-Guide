@@ -1,25 +1,9 @@
+REM Copied from Fractals/build.bat with minor changes
 @echo off
-
+set SRC=main.c
+set EXE=main
 setlocal
-
-set SourceFiles=../koch-snowflake-fractal.c
-set OutputName=koch-snowflake-fractal.exe
-
 pushd ..
-
-set CLFlags=-Od
-set CLANGFlags=-g -gcodeview
-set GCCFlags=-O
-
-if "%1" neq "optimize" goto DoneConfig
-set CLFlags=-O2
-set CLANGFlags=-O2 -gcodeview
-set GCCFlags=-O2
-
-echo -------------------------------------
-echo Optimize Build configured
-echo -------------------------------------
-:DoneConfig
 
 if not exist "Libraries" mkdir Libraries
 if exist "Libraries/SDL2" goto SkipDownload
@@ -35,16 +19,14 @@ popd
 :SkipDownload
 popd
 
-set SDL2_Include="../../Libraries/SDL2/SDL2-2.0.14/"
+set SDL2_Include="../../Libraries/SDL2/SDL2-2.0.14/SDL2/"
 set SDL2_Library="../../Libraries/SDL2/SDL2-2.0.14/lib/x64/"
 set SDL2_DLL="..\..\Libraries\SDL2\SDL2-2.0.14\lib\x64\SDL2.dll"
 
 if not exist "bin" mkdir bin
 
 echo -------------------------------------
-pushd bin
 xcopy %SDL2_DLL% bin\ /Y
-popd
 echo SDL2 inlude path:  %SDL2_Include%
 echo SDL2 library path: %SDL2_Library%
 
@@ -52,7 +34,7 @@ where cl >nul 2>nul
 if %ERRORLEVEL% neq 0 goto SkipMSVC
 echo Building with MSVC
 pushd bin
-call cl -I%SDL2_Include% -nologo %CLFlags% -Zi -EHsc %SourceFiles% -Fe%OutputName% /link /LIBPATH:%SDL2_Library% SDL2.lib SDL2main.lib Shell32.lib /subsystem:windows
+call cl -I%SDL2_Include% -nologo -Zi -EHsc ../%SRC% /link /LIBPATH:%SDL2_Library% SDL2.lib SDL2main.lib Shell32.lib /subsystem:console
 popd
 goto Finished
 
@@ -62,7 +44,7 @@ where clang >nul 2>nul
 IF %ERRORLEVEL% NEQ 0 goto SkipCLANG
 echo Building with CLANG
 pushd bin
-call clang -I%SDL2_Include% -L%SDL2_Library% %CLANGFlags% %SourceFiles% -o %OutputName% -lSDL2main -lSDL2 -lShell32 -Xlinker -subsystem:windows
+call clang -I%SDL2_Include% -L%SDL2_Library% ../%SRC% -o %EXE% -lSDL2.lib -lSDL2main.lib -lShell32.lib
 popd
 goto Finished
 
@@ -72,7 +54,7 @@ where gcc >nul 2>nul
 IF %ERRORLEVEL% NEQ 0 goto SkipGCC
 echo Building with GCC
 pushd bin
-call gcc -I%SDL2_Include% -L%SDL2_Library% %GCCFlags% %SourceFiles% -o %OutputName% -o koch-snowflake-fractal.exe -lSDL2main -lSDL2 -lShell32
+call gcc -I%SDL2_Include% -L%SDL2_Library% ../%main% -o %EXE% -lSDL2.lib -lSDL2main.lib -lShell32.lib
 popd
 goto Finished
 

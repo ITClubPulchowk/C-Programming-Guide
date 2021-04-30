@@ -9,13 +9,13 @@ set SourceFiles=../../main.c ../../glfw/src/context.c ../../glfw/src/egl_context
 set MsBuildConfiguration=Debug
 set CLFlags=-Od
 set CLANGFlags=-g -gcodeview
-set GCCFlags=-Od
+set GCCFlags=-O
 
 if "%1" neq "optimize" goto DoneConfig
 set MsBuildConfiguration=Release
 set CLFlags=-O2
 set CLANGFlags=-O2 -gcodeview
-set GCCFlags=-O
+set GCCFlags=-O2
 
 echo -------------------------------------
 echo Optimize Build configured
