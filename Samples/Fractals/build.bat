@@ -1,7 +1,25 @@
 @echo off
 
 setlocal
+
+set SourceFiles=../koch-snowflake-fractal.c
+set OutputName=koch-snowflake-fractal.exe
+
 pushd ..
+
+set CLFlags=-Od
+set CLANGFlags=-g -gcodeview
+set GCCFlags=-O
+
+if "%1" neq "optimize" goto DoneConfig
+set CLFlags=-O2
+set CLANGFlags=-O2 -gcodeview
+set GCCFlags=-O2
+
+echo -------------------------------------
+echo Optimize Build configured
+echo -------------------------------------
+:DoneConfig
 
 if not exist "Libraries" mkdir Libraries
 if exist "Libraries/SDL2" goto SkipDownload
@@ -34,7 +52,7 @@ where cl >nul 2>nul
 if %ERRORLEVEL% neq 0 goto SkipMSVC
 echo Building with MSVC
 pushd bin
-call cl -I%SDL2_Include% -nologo -Zi -EHsc ../koch-snowflake-fractal.c /link /LIBPATH:%SDL2_Library% SDL2.lib SDL2main.lib Shell32.lib /subsystem:windows
+call cl -I%SDL2_Include% -nologo %CLFlags% -Zi -EHsc %SourceFiles% -Fe%OutputName% /link /LIBPATH:%SDL2_Library% SDL2.lib SDL2main.lib Shell32.lib /subsystem:windows
 popd
 goto Finished
 
@@ -44,7 +62,7 @@ where clang >nul 2>nul
 IF %ERRORLEVEL% NEQ 0 goto SkipCLANG
 echo Building with CLANG
 pushd bin
-call clang -I%SDL2_Include% -L%SDL2_Library% ../koch-snowflake-fractal.c -o koch-snowflake-fractal.exe -lSDL2main -lSDL2 -lShell32 -Xlinker -subsystem:windows
+call clang -I%SDL2_Include% -L%SDL2_Library% %CLANGFlags% %SourceFiles% -o %OutputName% -lSDL2main -lSDL2 -lShell32 -Xlinker -subsystem:windows
 popd
 goto Finished
 
@@ -54,7 +72,7 @@ where gcc >nul 2>nul
 IF %ERRORLEVEL% NEQ 0 goto SkipGCC
 echo Building with GCC
 pushd bin
-call gcc -I%SDL2_Include% -L%SDL2_Library% ../koch-snowflake-fractal.c -o koch-snowflake-fractal.exe -lSDL2main -lSDL2 -lShell32
+call gcc -I%SDL2_Include% -L%SDL2_Library% %GCCFlags% %SourceFiles% -o %OutputName% -o koch-snowflake-fractal.exe -lSDL2main -lSDL2 -lShell32
 popd
 goto Finished
 
