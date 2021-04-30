@@ -24,7 +24,9 @@ set SDL2_DLL="..\..\Libraries\SDL2\SDL2-2.0.14\lib\x64\SDL2.dll"
 if not exist "bin" mkdir bin
 
 echo -------------------------------------
+pushd bin
 xcopy %SDL2_DLL% bin\ /Y
+popd
 echo SDL2 inlude path:  %SDL2_Include%
 echo SDL2 library path: %SDL2_Library%
 
@@ -32,7 +34,7 @@ where cl >nul 2>nul
 if %ERRORLEVEL% neq 0 goto SkipMSVC
 echo Building with MSVC
 pushd bin
-call cl -I%SDL2_Include% -nologo -Zi -EHsc ../koch-snowflake-fractal.c /link /LIBPATH:%SDL2_Library% SDL2.lib SDL2main.lib Shell32.lib /subsystem:console
+call cl -I%SDL2_Include% -nologo -Zi -EHsc ../koch-snowflake-fractal.c /link /LIBPATH:%SDL2_Library% SDL2.lib SDL2main.lib Shell32.lib /subsystem:windows
 popd
 goto Finished
 
@@ -42,7 +44,7 @@ where clang >nul 2>nul
 IF %ERRORLEVEL% NEQ 0 goto SkipCLANG
 echo Building with CLANG
 pushd bin
-call clang -I%SDL2_Include% -L%SDL2_Library% ../koch-snowflake-fractal.c -o koch-snowflake-fractal.exe -lSDL2.lib -lSDL2main.lib -lShell32.lib
+call clang -I%SDL2_Include% -L%SDL2_Library% ../koch-snowflake-fractal.c -o koch-snowflake-fractal.exe -lSDL2main -lSDL2 -lShell32 -Xlinker -subsystem:windows
 popd
 goto Finished
 
@@ -52,7 +54,7 @@ where gcc >nul 2>nul
 IF %ERRORLEVEL% NEQ 0 goto SkipGCC
 echo Building with GCC
 pushd bin
-call gcc -I%SDL2_Include% -L%SDL2_Library% ../koch-snowflake-fractal.c -o koch-snowflake-fractal.exe -lSDL2.lib -lSDL2main.lib -lShell32.lib
+call gcc -I%SDL2_Include% -L%SDL2_Library% ../koch-snowflake-fractal.c -o koch-snowflake-fractal.exe -lSDL2main -lSDL2 -lShell32
 popd
 goto Finished
 
