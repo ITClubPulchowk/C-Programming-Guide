@@ -1,11 +1,13 @@
 #!/bin/bash
 mkdir -p ./bin
-# e.g.
-INCLUDE="${HOME}/libraries/SDL2-2.0.14/include"
-#INCLUDE=""
+# Enter your SDL include directory here. SDL.h must exist in this directory and not in any other subdirectory
+# e.g. INCLUDE="${HOME}/libraries/SDL2-2.0.14/include"
+INCLUDE=""
 CC=""
 compile_command=""
 SRC="main.c"
+BIN_NAME="voronoi"
+
 echo "Checking if gcc exists...."
 if gcc -v >/dev/null 2>&1; then
   echo "gcc exists. Compiling with gcc."
@@ -30,13 +32,12 @@ else
   compile_command="$CC -g"
 fi
 
-if [ "${INCLUDE}" = "" ]; then
-  echo "Warning: INCLUDE directory not set!"
-else
-  compile_command="${compile_command} -I${INCLUDE}"  
-fi
-
-compile_command="${compile_command} -o ./bin/main ${SRC} -lSDL2"
+while [ ! -f "${INCLUDE}/SDL.h" ]
+do
+  echo "SDL.h not found in the provided directory"
+  read -p "Enter you SDL directory here: " INCLUDE
+done
+compile_command="${compile_command} -I${INCLUDE} -o ./bin/${BIN_NAME} ${SRC} -lSDL2"
 echo $compile_command
 if eval $compile_command ; then
   echo "Compilation finished successfully!"

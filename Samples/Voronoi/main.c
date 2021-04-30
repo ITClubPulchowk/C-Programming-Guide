@@ -492,9 +492,15 @@ void insert_vonoroi_point(Vonoroi *v, v2 point) {
   // Find the vonoroi region for the point
   int index = find_vonoroi_region(v, point);
   assert(index != -1);
-
-  v2 site = v->sites[index];
+  
   Region *r = v->region_list[index];
+  v2 site = r->site;
+  
+  if ( fabs(point.x-site.x) < EPSILON && fabs(point.y-site.y) < EPSILON ){
+    fprintf( stderr, "Input point too close to existing site. Ignoring..\n" );
+    return;
+  }
+  
   arrpush(v->sites, point);
 
   Line l = perpendicular_bisector(point, site);
