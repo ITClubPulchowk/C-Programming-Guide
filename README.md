@@ -13,7 +13,6 @@ For more of a walkthrough guide, visit the [wiki](https://github.com/IT-Club-Pul
 * [Visual Studio](https://visualstudio.microsoft.com/vs/features/cplusplus/) - Windows
 * [XCode](https://developer.apple.com/xcode/) - Mac
 * [Clion](https://www.jetbrains.com/clion/) - Linux, requires a JetBrains account with student account (pcampus mail) for free access
-* [Visual Studio Code](https://code.visualstudio.com/docs/languages/cpp) - A ligher alternative to Visual Studio. Linux users may use this since Visual Studio is not available on Linux.
 
 ## Tools
 * [RemedyBG](https://remedybg.itch.io/remedybg) - Windows
