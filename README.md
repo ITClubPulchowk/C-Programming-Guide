@@ -31,6 +31,7 @@ For more of a walkthrough guide, visit the [wiki](https://github.com/IT-Club-Pul
 
 ## Tutorial Links
 * [C Wiki](https://en.wikibooks.org/wiki/C_Programming)
+* [CSPC 223 - Yale University, 2021](http://cs.yale.edu/homes/aspnes/classes/223/notes.html)
 
 ## Tutorial Video
 * [HandmadeHero](https://www.youtube.com/watch?v=F3ntGDm6hOs&list=PLEMXAbCVnmY6RverunClc_DMLNDd3ASRp)
