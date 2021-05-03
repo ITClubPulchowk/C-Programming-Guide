@@ -1949,8 +1949,6 @@ void panel_render(Panel *panel) {
 
 	glEnd();
 	glDisable(GL_TEXTURE_2D);
-
-	glPopMatrix();
 }
 
 void actor_render(Actor *actor) {
@@ -2626,8 +2624,6 @@ void michi_render(Michi *michi) {
 	}
 
 	actor_render(&michi->actor);
-
-	glPopMatrix();
 
 	panel_render(&michi->panel);
 }
