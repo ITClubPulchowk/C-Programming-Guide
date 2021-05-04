@@ -16,7 +16,6 @@ echo --------------------------------------------------
 which clang &> /dev/null
 if [ $? == 0 ]; then
 	mkdir -p bin/CLANG
-	cp Stanberry.ttf bin/CLANG/ &> /dev/null
 	cp Logo.bmp bin/CLANG/ &> /dev/null
 	pushd bin/CLANG &> /dev/null
 	echo Compiling with CLANG...
@@ -32,7 +31,6 @@ echo --------------------------------------------------
 which gcc &> /dev/null
 if [ $? == 0 ]; then
 	mkdir -p bin/GCC
-	cp Stanberry.ttf bin/GCC/ &> /dev/null
 	cp Logo.bmp bin/GCC/ &> /dev/null
 	pushd bin/GCC &> /dev/null
 	echo Compiling with GCC...
