@@ -391,9 +391,7 @@ int main() {
         glfwPollEvents();
 
         if (ReloadShaderIfFileChanged(&mandelbrot.shader)) {
-            mandelbrot.u_resolution = glGetUniformLocation(mandelbrot.shader.id, "u_Resolution");
-            mandelbrot.u_rect_min = glGetUniformLocation(mandelbrot.shader.id, "u_RectMin");
-            mandelbrot.u_rect_max = glGetUniformLocation(mandelbrot.shader.id, "u_RectMax");
+            LoadShaderLocations(&mandelbrot);
         }
 
         glfwGetFramebufferSize(window, &width, &height);
