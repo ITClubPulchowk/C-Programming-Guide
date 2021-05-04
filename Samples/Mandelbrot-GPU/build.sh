@@ -23,6 +23,7 @@ if [ $? == 0 ]; then
 	clang $CompilerFlags $IncludeDirs -Wno-switch -Wno-pointer-sign -D_GLFW_X11 $SourceFiles -o Mandelbrot-GPU.out -ldl -lGL -lpthread -lm
 	popd &> /dev/null
 	echo Compiling with CLANG finished.
+  cp -t ./bin/CLANG/ *.vert *.frag
 else
 	echo Clang compiler not detected. Skipping compiling with Clang.
 fi
@@ -35,9 +36,10 @@ if [ $? == 0 ]; then
 	cp Logo.bmp bin/GCC/ &> /dev/null
 	pushd bin/GCC &> /dev/null
 	echo Compiling with GCC...
-	gcc $CompilerFlags $IncludeDirs -Wno-switch -Wno-pointer-sign -Wno-unused-result -D_GLFW_X11 $SourceFiles -o Mandelbrot-GPU.out -ldl -lGL -lpthread -lm
+	gcc $CompilerFlags $IncludeDirs -g -Wno-switch -Wno-pointer-sign -Wno-unused-result -D_GLFW_X11 $SourceFiles -o Mandelbrot-GPU.out -ldl -lGL -lpthread -lm
 	popd &> /dev/null
 	echo Compiling with GCC finished.
+  cp -t ./bin/GCC/ *.vert *.frag
 else
 	echo Gcc compiler not detected. Skipping compiling with Gcc.
 fi

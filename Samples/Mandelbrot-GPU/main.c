@@ -46,8 +46,8 @@ uint64_t GetFileModifiedTime(const char *file) {
 #else
 #include <sys/stat.h>
 uint64_t GetFileModifiedTime(const char *file) {
-    struct _stat buf;
-    if (_stat(file, &buf)) {
+    struct stat buf;
+    if (stat(file, &buf)) {
         return buf.st_mtime;
     }
     return 0;
@@ -58,6 +58,10 @@ char *ReadEntireFile(const char *file, uint64_t *time) {
     *time = GetFileModifiedTime(file);
 
     FILE *f = fopen(file, "rb");
+    if ( !f ){
+      fprintf(stderr, "File not found %s\n", file );
+      return NULL;
+    }
     fseek(f, 0, SEEK_END);
     long fsize = ftell(f);
     fseek(f, 0, SEEK_SET);
