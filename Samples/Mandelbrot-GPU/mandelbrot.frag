@@ -1,6 +1,6 @@
 #version 420
 
-#define MAX_ITERATIONS 200
+#define MAX_ITERATIONS 500
 #define cproduct(a, b) vec2(a.x*b.x-a.y*b.y, a.x*b.y+a.y*b.x)
 
 out vec4 FragmentColor;

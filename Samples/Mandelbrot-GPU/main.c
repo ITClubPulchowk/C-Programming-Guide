@@ -277,12 +277,49 @@ typedef struct Mandelbrot {
 
     float rect_min[2];
     float rect_max[2];
+
+    float aspect_ratio;
 } Mandelbrot;
 
 void LoadShaderLocations(Mandelbrot *mandelbrot) {
     mandelbrot->u_resolution = glGetUniformLocation(mandelbrot->shader.id, "u_Resolution");
     mandelbrot->u_rect_min = glGetUniformLocation(mandelbrot->shader.id, "u_RectMin");
     mandelbrot->u_rect_max = glGetUniformLocation(mandelbrot->shader.id, "u_RectMax");
+}
+
+float MapRange(float from_x1, float from_x2, float to_x1, float to_x2, float x) {
+    return (to_x2 - to_x1) / (from_x2 - from_x1) * (x - from_x1) + to_x1;
+}
+
+void HandleScrollEvent(GLFWwindow *window, double scroll_x, double scroll_y) {
+    if (scroll_y != 0) {
+        Mandelbrot *mandelbrot = (Mandelbrot *)glfwGetWindowUserPointer(window);
+
+        double mouse_x, mouse_y;
+        glfwGetCursorPos(window, &mouse_x, &mouse_y);
+        int width, height;
+        glfwGetFramebufferSize(window, &width, &height);
+
+        float cx = MapRange(0, (float)width, mandelbrot->rect_min[0], mandelbrot->rect_max[0], (float)mouse_x);
+        float cy = MapRange(0, (float)height, mandelbrot->rect_min[1], mandelbrot->rect_max[1], (float)height - (float)mouse_y);
+
+        mandelbrot->rect_min[0] -= cx;
+        mandelbrot->rect_max[0] -= cx;
+        mandelbrot->rect_min[1] -= cy;
+        mandelbrot->rect_max[1] -= cy;
+
+        float factor = scroll_y > 0 ? 0.9f : 1.1f;
+
+        mandelbrot->rect_min[0] *= factor;
+        mandelbrot->rect_max[0] *= factor;
+        mandelbrot->rect_min[1] *= factor;
+        mandelbrot->rect_max[1] *= factor;
+        
+        mandelbrot->rect_min[0] += cx;
+        mandelbrot->rect_max[0] += cx;
+        mandelbrot->rect_min[1] += cy;
+        mandelbrot->rect_max[1] += cy;
+    }
 }
 
 int main() {
@@ -326,12 +363,15 @@ int main() {
     }
 
     LoadShaderLocations(&mandelbrot);
-    mandelbrot.rect_min[0] = -2.5f;
+    mandelbrot.rect_min[0] = -2.0f;
     mandelbrot.rect_min[1] = -2.0f;
-    mandelbrot.rect_max[0] = 1.0f;
+    mandelbrot.rect_max[0] = 2.0f;
     mandelbrot.rect_max[1] = 2.0f;
 
+    mandelbrot.aspect_ratio = (mandelbrot.rect_max[0] - mandelbrot.rect_min[0]) / (mandelbrot.rect_max[1] - mandelbrot.rect_min[1]);
+
     glfwSetWindowUserPointer(window, &mandelbrot);
+    glfwSetScrollCallback(window, HandleScrollEvent);
 
     GLuint vao;
     glGenVertexArrays(1, &vao);
