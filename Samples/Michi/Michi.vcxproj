@@ -198,7 +198,10 @@ xcopy "Logo.bmp" $(OutputPath) /Y
     <ClInclude Include="stb_truetype.h" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="resource16.rc" />
+    <ResourceCompile Include="Resource.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Logo.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
