@@ -3,6 +3,7 @@
 setlocal
 
 set ResourceFileIn=resource.rc
+set ResourceFileIn16=resource16.rc
 set ResourceFileOut=resource.res
 set SourceFiles=../../main.c ../../glfw/src/context.c ../../glfw/src/egl_context.c ../../glfw/src/init.c ../../glfw/src/input.c ../../glfw/src/monitor.c ../../glfw/src/osmesa_context.c ../../glfw/src/vulkan.c ../../glfw/src/wgl_context.c ../../glfw/src/win32_init.c ../../glfw/src/win32_joystick.c ../../glfw/src/win32_monitor.c ../../glfw/src/win32_thread.c ../../glfw/src/win32_time.c ../../glfw/src/win32_window.c ../../glfw/src/window.c ../../glad/src/glad.c
 set IncludeDirs=-I"../../glfw/include/" -I"../../glad/include/"
@@ -47,13 +48,13 @@ if %ERRORLEVEL% neq 0 goto SkipMSVC
 echo Building with Msvc
 if not exist "bin\MsvcBuild" mkdir bin\MsvcBuild
 call xcopy "resource.h" bin\MsvcBuild\ /Y
-call xcopy "resource.rc" bin\MsvcBuild\ /Y
+call xcopy "resource16.rc" bin\MsvcBuild\ /Y
 call xcopy "Logo.ico" bin\MsvcBuild\ /Y
 call xcopy "Logo.bmp" bin\MsvcBuild\ /Y
 call xcopy "mandelbrot.vert" bin\MsvcBuild\ /Y
 call xcopy "mandelbrot.frag" bin\MsvcBuild\ /Y
 pushd bin\MsvcBuild
-call rc /fm%ResourceFileOut% %ResourceFileIn%
+call rc /fm%ResourceFileOut% %ResourceFileIn16%
 call cl -nologo -D_CRT_SECURE_NO_WARNINGS -D_GLFW_WIN32 -nologo -Zi -EHsc %CLFlags% %IncludeDirs% %SourceFiles% %ResourceFileOut% -FeMandelbrot-GPU.exe /link user32.lib gdi32.lib shell32.lib
 popd
 echo -------------------------------------
