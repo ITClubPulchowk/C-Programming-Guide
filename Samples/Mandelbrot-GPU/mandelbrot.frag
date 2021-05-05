@@ -9,7 +9,7 @@ uniform vec2 u_Resolution;
 uniform vec2 u_RectMin;
 uniform vec2 u_RectMax;
 
-float Radius = 4.0f;
+float Radius = 10.0f;
 vec3 ColorWeight = vec3(2.0, 4.0, 5.0);
 
 uint Diverge(inout vec2 c, float radius) {
@@ -25,8 +25,8 @@ uint Diverge(inout vec2 c, float radius) {
 
 void main() {
 	vec2 st = gl_FragCoord.xy / u_Resolution;
-	
-	vec2 z = u_RectMin + st * (u_RectMax - u_RectMin);
+	float aspect_ratio = u_Resolution.x / u_Resolution.y;
+	vec2 z = u_RectMin + st * (u_RectMax - u_RectMin) * vec2(aspect_ratio, 1);
 	uint iterations = Diverge(z, Radius);
 	float luminance = ((iterations - log2(length(z) / Radius)) / MAX_ITERATIONS);
 	vec3 color = ColorWeight * luminance;
