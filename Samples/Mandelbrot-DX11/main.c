@@ -257,7 +257,8 @@ void DirectXInitialize(HWND window) {
 	swap_chain_desc.Flags = swap_chain_flags;
 	swap_chain_desc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 
-	hresult = factory->lpVtbl->CreateSwapChainForHwnd(factory, (IUnknown *)g_device, window, &swap_chain_desc, NULL, NULL, &g_swap_chain);
+	hresult = factory->lpVtbl->CreateSwapChainForHwnd(factory, (IUnknown *)g_device, window, 
+													  &swap_chain_desc, NULL, NULL, &g_swap_chain);
 	DirectXHandleError(hresult);
 
 	#if defined(_DEBUG) || defined(DEBUG)
@@ -266,7 +267,7 @@ void DirectXInitialize(HWND window) {
 	if (SUCCEEDED(g_device->lpVtbl->QueryInterface(g_device, &IID_ID3D11Debug, (void **)&debug))) {
 		ID3D11InfoQueue *info_queue = NULL;
 		if (SUCCEEDED(g_device->lpVtbl->QueryInterface(g_device, &IID_ID3D11InfoQueue, (void **)&info_queue))) {
-			MessageBoxW(NULL, L"ID3D11Debug enabled.", L"DirectX", MB_ICONERROR | MB_OK);
+			MessageBoxW(window, L"ID3D11Debug enabled.", L"DirectX", MB_ICONERROR | MB_OK);
 
 			info_queue->lpVtbl->SetBreakOnSeverity(info_queue, D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
 			info_queue->lpVtbl->SetBreakOnSeverity(info_queue, D3D11_MESSAGE_SEVERITY_ERROR, true);
@@ -366,6 +367,9 @@ LRESULT CALLBACK WindowProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 
 				if (input_size < size) {
 					input = (RAWINPUT *)realloc(input, size);
+					if (input == NULL) {
+						FatalAppExitW(0, L"realloc failed, out of memory");
+					}
 					input_size = size;
 				}
 
@@ -411,6 +415,9 @@ ID3DBlob *CompileHLSL(ID3DBlob *source, const char *identifier, const char *entr
 		if (g_string_buffer_size < error_messages->lpVtbl->GetBufferSize(error_messages) + 1) {
 			g_string_buffer_size = error_messages->lpVtbl->GetBufferSize(error_messages) + 1;
 			g_string_buffer = (char *)realloc(g_string_buffer, g_string_buffer_size);
+			if (g_string_buffer == NULL) {
+				FatalAppExitW(0, L"realloc failed, out of memory");
+			}
 		}
 
 		memcpy(g_string_buffer, 
@@ -536,7 +543,7 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_l
 	window_class.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
 	window_class.lpfnWndProc = WindowProc;
 	window_class.hInstance = instance;
-	window_class.hIcon = NULL;
+	window_class.hIcon = LoadImageW(instance, MAKEINTRESOURCEW(101), IMAGE_ICON, 0, 0, 0);
 	window_class.hCursor = LoadCursorW(NULL, IDC_ARROW);
 	window_class.lpszClassName = L"ZeroWindowClass";
 
