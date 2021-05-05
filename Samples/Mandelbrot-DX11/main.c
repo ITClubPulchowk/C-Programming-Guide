@@ -1,6 +1,7 @@
 #include <Windows.h>
 #include <avrt.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <dxgi.h>
 #include <d3d11_1.h>
 #include <dxgi1_5.h>
@@ -11,44 +12,18 @@
 #pragma comment(lib, "Winmm.lib")
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "dxguid.lib")
 
 #include <d3dcompiler.h>
 #pragma comment(lib, "d3dcompiler.lib")
 
 //
-// Defer
-//
-
-#define CONCAT_INTERNAL(x, y) x##y
-#define CONCAT(x, y)          CONCAT_INTERNAL(x, y)
-
-template <typename T>
-struct ExitScope {
-	T lambda;
-	ExitScope(T lambda) :
-		lambda(lambda) {
-	}
-	~ExitScope() {
-		lambda();
-	}
-};
-
-struct ExitScopeHelp {
-	template <typename T>
-	ExitScope<T> operator+(T t) {
-		return t;
-	}
-};
-
-#define defer const auto &CONCAT(defer__, __LINE__) = ExitScopeHelp() + [&]()
-
-//
 //
 //
 
-struct float2 {
+typedef struct float2 {
 	float x, y;
-};
+} float2;
 
 #define ArrayCount(a) (size_t)(sizeof(a) / sizeof((a)[0]))
 
@@ -183,18 +158,18 @@ void DirectXHandleError(HRESULT res) {
 void DirectXCreateResources() {
 	HRESULT hresult;
 
-	hresult = g_swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void **>(&g_render_texture));
+	hresult = g_swap_chain->lpVtbl->GetBuffer(g_swap_chain, 0, &IID_ID3D11Texture2D, &g_render_texture);
 	DirectXHandleError(hresult);
 
-	hresult = g_device->CreateRenderTargetView(g_render_texture, 0, &g_render_target_view);
+	hresult = g_device->lpVtbl->CreateRenderTargetView(g_device, (ID3D11Resource *)g_render_texture, 0, &g_render_target_view);
 	DirectXHandleError(hresult);
 }
 
 void DirectXDestoryResources() {
-	g_render_target_view->Release();
-	g_render_texture->Release();
-	g_device_context->ClearState();
-	g_device_context->Flush();
+	g_render_target_view->lpVtbl->Release(g_render_target_view);
+	g_render_texture->lpVtbl->Release(g_render_texture);
+	g_device_context->lpVtbl->ClearState(g_device_context);
+	g_device_context->lpVtbl->Flush(g_device_context);
 }
 
 void DirectXInitialize(HWND window) {
@@ -205,8 +180,7 @@ void DirectXInitialize(HWND window) {
 	factory_flags = DXGI_CREATE_FACTORY_DEBUG;
 	#endif
 
-	DirectXHandleError(CreateDXGIFactory2(factory_flags, IID_PPV_ARGS(&factory)));
-	defer{ factory->Release(); };
+	DirectXHandleError(CreateDXGIFactory2(factory_flags, &IID_IDXGIFactory2, &factory));
 
 	uint32_t flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 	#if defined(_DEBUG) || defined(DEBUG)
@@ -223,12 +197,12 @@ void DirectXInitialize(HWND window) {
 	IDXGIAdapter1 *adapter_selection = 0;
 
 	for (uint32_t adapter_index = 0;
-		 factory->EnumAdapters1(adapter_index, &adapter_selection) != DXGI_ERROR_NOT_FOUND;
+		 factory->lpVtbl->EnumAdapters1(factory, adapter_index, &adapter_selection) != DXGI_ERROR_NOT_FOUND;
 		 ++adapter_index) {
 		DXGI_ADAPTER_DESC1 desc;
-		adapter_selection->GetDesc1(&desc);
+		adapter_selection->lpVtbl->GetDesc1(adapter_selection, &desc);
 
-		auto device_creation_result = D3D11CreateDevice(adapter_selection,
+		auto device_creation_result = D3D11CreateDevice((IDXGIAdapter *)adapter_selection,
 														D3D_DRIVER_TYPE_UNKNOWN,
 														0, flags,
 														feature_levels, ArrayCount(feature_levels),
@@ -238,7 +212,7 @@ void DirectXInitialize(HWND window) {
 			max_dedicated_memory = desc.DedicatedVideoMemory;
 			adapter = adapter_selection;
 		} else {
-			adapter_selection->Release();
+			adapter_selection->lpVtbl->Release(adapter_selection);
 		}
 	}
 
@@ -246,12 +220,10 @@ void DirectXInitialize(HWND window) {
 		FatalAppExitW(0, L"DirectX supported adapter not found!");
 	}
 
-	defer{ adapter->Release(); };
-
 	HRESULT hresult;
 
 	D3D_FEATURE_LEVEL feature;
-	hresult = D3D11CreateDevice(adapter,
+	hresult = D3D11CreateDevice((IDXGIAdapter *)adapter,
 								D3D_DRIVER_TYPE_UNKNOWN,
 								NULL, flags,
 								feature_levels, ArrayCount(feature_levels),
@@ -261,9 +233,9 @@ void DirectXInitialize(HWND window) {
 	uint32_t swap_chain_flags = 0;
 
 	IDXGIFactory5 *factory5;
-	if (SUCCEEDED(factory->GetParent(__uuidof(IDXGIFactory5), reinterpret_cast<void **>(&factory5)))) {
+	if (SUCCEEDED(factory->lpVtbl->GetParent(factory, &IID_IDXGIFactory5, &factory5))) {
 		BOOL tearing = FALSE;
-		if (SUCCEEDED(factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tearing, sizeof(tearing)))) {
+		if (SUCCEEDED(factory5->lpVtbl->CheckFeatureSupport(factory5, DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tearing, sizeof(tearing)))) {
 			if (tearing == TRUE) {
 				swap_chain_flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 				g_tearing_capable = true;
@@ -271,7 +243,7 @@ void DirectXInitialize(HWND window) {
 		}
 	}
 
-	DXGI_SWAP_CHAIN_DESC1 swap_chain_desc = {};
+	DXGI_SWAP_CHAIN_DESC1 swap_chain_desc;
 	swap_chain_desc.BufferCount = 2;
 	swap_chain_desc.Width = 0;
 	swap_chain_desc.Height = 0;
@@ -285,50 +257,53 @@ void DirectXInitialize(HWND window) {
 	swap_chain_desc.Flags = swap_chain_flags;
 	swap_chain_desc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 
-	hresult = factory->CreateSwapChainForHwnd(g_device, window, &swap_chain_desc, NULL, NULL, &g_swap_chain);
+	hresult = factory->lpVtbl->CreateSwapChainForHwnd(factory, (IUnknown *)g_device, window, &swap_chain_desc, NULL, NULL, &g_swap_chain);
 	DirectXHandleError(hresult);
 
 	#if defined(_DEBUG) || defined(DEBUG)
 	ID3D11Debug *debug = 0;
 
-	if (SUCCEEDED(g_device->QueryInterface(__uuidof(ID3D11Debug), (void **)&debug))) {
-		ID3D11InfoQueue *info_queue = nullptr;
-		if (SUCCEEDED(g_device->QueryInterface(__uuidof(ID3D11InfoQueue), (void **)&info_queue))) {
+	if (SUCCEEDED(g_device->lpVtbl->QueryInterface(g_device, &IID_ID3D11Debug, (void **)&debug))) {
+		ID3D11InfoQueue *info_queue = NULL;
+		if (SUCCEEDED(g_device->lpVtbl->QueryInterface(g_device, &IID_ID3D11InfoQueue, (void **)&info_queue))) {
 			MessageBoxW(NULL, L"ID3D11Debug enabled.", L"DirectX", MB_ICONERROR | MB_OK);
 
-			info_queue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
-			info_queue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
+			info_queue->lpVtbl->SetBreakOnSeverity(info_queue, D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
+			info_queue->lpVtbl->SetBreakOnSeverity(info_queue, D3D11_MESSAGE_SEVERITY_ERROR, true);
 
 			D3D11_MESSAGE_ID hide[] = {
 				D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS,
 			};
 
-			D3D11_INFO_QUEUE_FILTER filter = {};
+			D3D11_INFO_QUEUE_FILTER filter;
+			ZeroMemory(&filter, sizeof(filter));
 			filter.DenyList.NumIDs = ArrayCount(hide);
 			filter.DenyList.pIDList = hide;
-			info_queue->AddStorageFilterEntries(&filter);
+			info_queue->lpVtbl->AddStorageFilterEntries(info_queue, &filter);
 
-			info_queue->Release();
+			info_queue->lpVtbl->Release(info_queue);
 		}
 	}
-	debug->Release();
+	debug->lpVtbl->Release(debug);
 	#endif
 
+	factory->lpVtbl->Release(factory);
+	adapter->lpVtbl->Release(adapter);
 
 	DirectXCreateResources();
 }
 
 void DirectXShutdown() {
 	DirectXDestoryResources();
-	g_swap_chain->Release();
-	g_device_context->Release();
-	g_device->Release();
+	g_swap_chain->lpVtbl->Release(g_swap_chain);
+	g_device_context->lpVtbl->Release(g_device_context);
+	g_device->lpVtbl->Release(g_device);
 }
 
 void DirectXWindowSizeChanged(uint32_t w, uint32_t h) {
 	if (g_device && w > 0 && h > 0) {
 		DirectXDestoryResources();
-		g_swap_chain->ResizeBuffers(2, 0, 0, DXGI_FORMAT_UNKNOWN, g_tearing_capable ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);
+		g_swap_chain->lpVtbl->ResizeBuffers(g_swap_chain, 2, 0, 0, DXGI_FORMAT_UNKNOWN, g_tearing_capable ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);
 		DirectXCreateResources();
 	}
 }
@@ -390,10 +365,8 @@ LRESULT CALLBACK WindowProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 				GetRawInputData((HRAWINPUT)lparam, RID_INPUT, 0, &size, sizeof(RAWINPUTHEADER));
 
 				if (input_size < size) {
-					if (input)
-						input = (RAWINPUT *)HeapReAlloc(GetProcessHeap(), 0, input, size);
-					else
-						input = (RAWINPUT *)HeapAlloc(GetProcessHeap(), 0, size);
+					input = (RAWINPUT *)realloc(input, size);
+					input_size = size;
 				}
 
 				if (GetRawInputData((HRAWINPUT)lparam, RID_INPUT, input, &size, sizeof(RAWINPUTHEADER)) == size &&
@@ -429,23 +402,27 @@ LRESULT CALLBACK WindowProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 
 ID3DBlob *CompileHLSL(ID3DBlob *source, const char *identifier, const char *entry_point, const char *target) {
 	ID3DBlob *code = 0, *error_messages = 0;
-	HRESULT result = D3DCompile2(source->GetBufferPointer(), source->GetBufferSize(), identifier, NULL, NULL, entry_point, target, 0, 0, 0, NULL, 0, &code, &error_messages);
+	HRESULT result = D3DCompile2(source->lpVtbl->GetBufferPointer(source), source->lpVtbl->GetBufferSize(source), 
+								 identifier, NULL, NULL, entry_point, target, 0, 0, 0, NULL, 0, 
+								 &code, &error_messages);
 
 	bool success = true;
 	if (FAILED(result)) {
-		if (g_string_buffer_size < error_messages->GetBufferSize() + 1) {
-			g_string_buffer_size = error_messages->GetBufferSize() + 1;
+		if (g_string_buffer_size < error_messages->lpVtbl->GetBufferSize(error_messages) + 1) {
+			g_string_buffer_size = error_messages->lpVtbl->GetBufferSize(error_messages) + 1;
 			g_string_buffer = (char *)realloc(g_string_buffer, g_string_buffer_size);
 		}
 
-		memcpy(g_string_buffer, error_messages->GetBufferPointer(), error_messages->GetBufferSize());
-		g_string_buffer[error_messages->GetBufferSize()] = 0;
+		memcpy(g_string_buffer, 
+			   error_messages->lpVtbl->GetBufferPointer(error_messages), 
+			   error_messages->lpVtbl->GetBufferSize(error_messages));
+		g_string_buffer[error_messages->lpVtbl->GetBufferSize(error_messages)] = 0;
 
 		MessageBoxA(NULL, g_string_buffer, "Compile Error", MB_ICONERROR | MB_OK);
 	}
 
 	if (error_messages) {
-		error_messages->Release();
+		error_messages->lpVtbl->Release(error_messages);
 	}
 
 	return code;
@@ -462,9 +439,12 @@ ID3DBlob *ReadEntireFile(HANDLE handle) {
 	if (FAILED(hres)) return result;
 
 	DWORD read_bytes;
-	BOOL res = ReadFile(handle, result->GetBufferPointer(), (DWORD)result->GetBufferSize(), &read_bytes, 0);
+	BOOL res = ReadFile(handle, 
+						result->lpVtbl->GetBufferPointer(result), 
+						(DWORD)result->lpVtbl->GetBufferSize(result),
+						&read_bytes, 0);
 	if (!res || read_bytes != file_size.QuadPart) {
-		result->Release();
+		result->lpVtbl->Release(result);
 		return NULL;
 	}
 
@@ -484,56 +464,66 @@ ULARGE_INTEGER GetFileAccessTime(HANDLE handle) {
 	return r;
 }
 
-bool LoadShader(HANDLE hfile, const char *identifier, ID3D11VertexShader **vertex_shader, ID3D11PixelShader **pixel_shader, ID3DBlob **layout = nullptr) {
+bool LoadShader(HANDLE hfile, const char *identifier, 
+				ID3D11VertexShader **vertex_shader, ID3D11PixelShader **pixel_shader, 
+				ID3DBlob **layout) {
 	const char *vertex_entry = "vs_main";
 	const char *pixel_entry = "ps_main";
 
-	auto blob = ReadEntireFile(hfile);
-	if (!blob) return false;
-	defer{ blob->Release(); };
+	ID3DBlob *blob = ReadEntireFile(hfile);
+	if (blob) {
+		HRESULT hres;
 
-	ID3DBlob *vertex = CompileHLSL(blob, identifier, vertex_entry, "vs_5_0");
-	if (!vertex) return false;
+		ID3DBlob *vertex = CompileHLSL(blob, identifier, vertex_entry, "vs_5_0");
+		if (vertex) {
+			ID3DBlob *pixel = CompileHLSL(blob, identifier, pixel_entry, "ps_5_0");
 
-	ID3DBlob *pixel = CompileHLSL(blob, identifier, pixel_entry, "ps_5_0");
-	if (!pixel) {
-		vertex->Release();
-		return false;
+			if (pixel) {
+				hres = g_device->lpVtbl->CreateVertexShader(g_device,
+															vertex->lpVtbl->GetBufferPointer(vertex), 
+															vertex->lpVtbl->GetBufferSize(vertex), 
+															NULL, vertex_shader);
+				if (SUCCEEDED(hres)) {
+					hres = g_device->lpVtbl->CreatePixelShader(g_device,
+															   pixel->lpVtbl->GetBufferPointer(pixel), 
+															   pixel->lpVtbl->GetBufferSize(pixel), 
+															   NULL, pixel_shader);
+					if (SUCCEEDED(hres)) {
+						pixel->lpVtbl->Release(pixel);
+						blob->lpVtbl->Release(blob);
+						if (layout) {
+							*layout = vertex;
+						} else {
+							vertex->lpVtbl->Release(vertex);
+						}
+						return true;
+					}
+
+					(*vertex_shader)->lpVtbl->Release(*vertex_shader);
+				}
+
+				pixel->lpVtbl->Release(pixel);
+			}
+
+			vertex->lpVtbl->Release(vertex);
+		}
+
+		blob->lpVtbl->Release(blob);
 	}
-	defer{ pixel->Release(); };
 
-	HRESULT hres;
-	hres = g_device->CreateVertexShader(vertex->GetBufferPointer(), vertex->GetBufferSize(), NULL, vertex_shader);
-	if (FAILED(hres)) {
-		vertex->Release();
-		return false;
-	}
-
-	hres = g_device->CreatePixelShader(pixel->GetBufferPointer(), pixel->GetBufferSize(), NULL, pixel_shader);
-	if (FAILED(hres)) {
-		vertex->Release();
-		(*vertex_shader)->Release();
-		return false;
-	}
-
-	if (layout) {
-		*layout = vertex;
-	} else {
-		vertex->Release();
-	}
-
-	return true;
+	return false;
 }
 
 #pragma pack(push, 4)
-struct alignas(16) Constant_Layout {
+typedef struct Constant_Layout {
 	float2 Resolution;
 	float2 RectMin;
 	float2 RectMax;
 	float2 Center;
 	float Zoom;
 	float AspectRatio;
-};
+	float padding[2];
+} Constant_Layout;
 #pragma pack(pop)
 
 int __stdcall wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_line, int show_cmd) {
@@ -600,7 +590,7 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_l
 	initial_data.SysMemPitch = 0;
 	initial_data.SysMemSlicePitch = 0;
 
-	HRESULT result = g_device->CreateBuffer(&buffer_desc, &initial_data, &vertex_buffer);
+	HRESULT result = g_device->lpVtbl->CreateBuffer(g_device, &buffer_desc, &initial_data, &vertex_buffer);
 	DirectXHandleError(result);
 
 	const char *file = "mandelbrot.hlsl";
@@ -609,8 +599,7 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_l
 	if (hfile == INVALID_HANDLE_VALUE) {
 		FatalAppExitW(0, L"Shader file not found");
 	}
-	defer{ CloseHandle(hfile); };
-
+	
 	ULARGE_INTEGER mod_time = GetFileAccessTime(hfile);
 
 	ID3D11VertexShader *vertex_shader = NULL;
@@ -625,7 +614,10 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_l
 	};
 
 	ID3D11InputLayout *input_layout;
-	result = g_device->CreateInputLayout(input_elements, ArrayCount(input_elements), layout->GetBufferPointer(), layout->GetBufferSize(), &input_layout);
+	result = g_device->lpVtbl->CreateInputLayout(g_device, input_elements, ArrayCount(input_elements), 
+												 layout->lpVtbl->GetBufferPointer(layout), 
+												 layout->lpVtbl->GetBufferSize(layout), 
+												 &input_layout);
 	DirectXHandleError(result);
 
 
@@ -638,7 +630,7 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_l
 	cbuffer_desc.StructureByteStride = 0;
 
 	ID3D11Buffer *constant_buffer;
-	result = g_device->CreateBuffer(&cbuffer_desc, NULL, &constant_buffer);
+	result = g_device->lpVtbl->CreateBuffer(g_device, &cbuffer_desc, NULL, &constant_buffer);
 	DirectXHandleError(result);
 
 	g_zoom = 1;
@@ -662,9 +654,9 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_l
 		if (new_mod_time.QuadPart > mod_time.QuadPart) {
 			ID3D11VertexShader *new_vertex_shader;
 			ID3D11PixelShader *new_pixel_shader;
-			if (LoadShader(hfile, file, &new_vertex_shader, &new_pixel_shader)) {
-				vertex_shader->Release();
-				pixel_shader->Release();
+			if (LoadShader(hfile, file, &new_vertex_shader, &new_pixel_shader, NULL)) {
+				vertex_shader->lpVtbl->Release(vertex_shader);
+				pixel_shader->lpVtbl->Release(pixel_shader);
 				vertex_shader = new_vertex_shader;
 				pixel_shader = new_pixel_shader;
 			}
@@ -694,30 +686,34 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_l
 		params.Zoom = g_zoom;
 		params.AspectRatio = params.Resolution.x / params.Resolution.y;
 
-		g_device_context->UpdateSubresource(constant_buffer, 0, NULL, &params, 0, 0);
+		g_device_context->lpVtbl->UpdateSubresource(g_device_context, (ID3D11Resource *)constant_buffer, 0, NULL, &params, 0, 0);
 
-		g_device_context->RSSetViewports(1, &viewport);
+		g_device_context->lpVtbl->RSSetViewports(g_device_context, 1, &viewport);
 
-		g_device_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		g_device_context->lpVtbl->IASetPrimitiveTopology(g_device_context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 		float color[] = { .2f, .2f, .2f, 1.f };
-		g_device_context->ClearRenderTargetView(g_render_target_view, color);
-		g_device_context->OMSetRenderTargets(1, &g_render_target_view, nullptr);
+		g_device_context->lpVtbl->ClearRenderTargetView(g_device_context, g_render_target_view, color);
+		g_device_context->lpVtbl->OMSetRenderTargets(g_device_context, 1, &g_render_target_view, NULL);
 
-		g_device_context->IASetVertexBuffers(0, 1, &vertex_buffer, &stride, &offset);
-		g_device_context->IASetInputLayout(input_layout);
+		g_device_context->lpVtbl->IASetVertexBuffers(g_device_context, 0, 1, &vertex_buffer, &stride, &offset);
+		g_device_context->lpVtbl->IASetInputLayout(g_device_context, input_layout);
 
-		g_device_context->PSSetConstantBuffers(0, 1, &constant_buffer);
+		g_device_context->lpVtbl->PSSetConstantBuffers(g_device_context, 0, 1, &constant_buffer);
 
-		g_device_context->VSSetShader(vertex_shader, NULL, 0);
-		g_device_context->PSSetShader(pixel_shader, NULL, 0);
+		g_device_context->lpVtbl->VSSetShader(g_device_context, vertex_shader, NULL, 0);
+		g_device_context->lpVtbl->PSSetShader(g_device_context, pixel_shader, NULL, 0);
 
-		g_device_context->Draw(6, 0);
+		g_device_context->lpVtbl->Draw(g_device_context, 6, 0);
 
-		g_swap_chain->Present(1, g_tearing_capable ? DXGI_PRESENT_ALLOW_TEARING : 0);
+		g_swap_chain->lpVtbl->Present(g_swap_chain, 1, g_tearing_capable ? DXGI_PRESENT_ALLOW_TEARING : 0);
 
-		g_device_context->ClearState();
+		g_device_context->lpVtbl->ClearState(g_device_context);
 	}
+
+	CloseHandle(hfile);
+
+	DirectXShutdown();
 
 	return 0;
 }
