@@ -1,0 +1,4 @@
+*.vcxproj.user
+*.vcxproj.filters
+.vs/
+/Resource.aps

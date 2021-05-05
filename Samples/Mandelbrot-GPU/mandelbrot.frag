@@ -9,7 +9,7 @@ uniform vec2 u_Resolution;
 uniform vec2 u_RectMin;
 uniform vec2 u_RectMax;
 
-float Radius = 10.0f;
+float Radius = 4.0f;
 vec3 ColorWeight = vec3(2.0, 4.0, 5.0);
 
 uint Diverge(inout vec2 c, float radius) {
