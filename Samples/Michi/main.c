@@ -133,6 +133,8 @@ void michi_free(void *ptr) {
 
 char *read_entire_file(const char *file) {
 	FILE *f = fopen(file, "rb");
+	if (f == NULL) return NULL;
+
 	fseek(f, 0, SEEK_END);
 	long fsize = ftell(f);
 	fseek(f, 0, SEEK_SET);
