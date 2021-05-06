@@ -743,12 +743,14 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_l
 				UINT subresource = 0;
 				HRESULT hr = g_device_context->lpVtbl->Map(g_device_context, (ID3D11Resource *)texture_to_save, subresource, D3D11_MAP_READ, 0, &resource);
 				if (SUCCEEDED(hr)) {
+					CreateDirectoryA("Captures", NULL);
+
 					char filename[MAX_PATH];
 
 					SYSTEMTIME time;
 					GetLocalTime(&time);
 
-					snprintf(filename, MAX_PATH, "Capture_%d-%d-%d_%d-%d-%d-%d.png", 
+					snprintf(filename, MAX_PATH, "Captures/Capture_%d-%d-%d_%d-%d-%d-%d.png", 
 							 (int)time.wYear, (int)time.wMonth, (int)time.wDay, 
 							 (int)time.wHour, (int)time.wMinute, (int)time.wSecond, (int)time.wMilliseconds);
 

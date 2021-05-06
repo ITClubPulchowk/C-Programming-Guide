@@ -7,6 +7,7 @@
 * In the same directroy as the executables there exits `mandelbrot.hlsl` file
 * You can edit and save the `mandelbrot.hlsl` file and it will automatically be reloaded by the program
 * You can use the mouse wheel to zoom in and out, and drag the screen for panning
+* Press [F5] to capture the screen, the images will be saved in `Captures` directory
 
 ## Variables
 *Note: The following variables are present in mandelbrot.frag file*
