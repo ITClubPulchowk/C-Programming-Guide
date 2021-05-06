@@ -10,9 +10,9 @@
 
 ## Variables
 *Note: The following variables are present in mandelbrot.frag file*
-- `Radius` : Change the value and observe the result
-- `ColorWeight` : Using this variable, control the output color of the Mandelbrot
-- `MaxIterations` : Change the number of iterations made in the calculation and observe the result
+- The `ps_main` function can be modified to call different coloring methods
+- The available methods are: `Mandelbrot_SimpleColoring`, `Mandelbrot_SmoothColoring`, `Mandelbrot_WaveColoring` and `Mandelbrot_WaveColoringAnimated`
+- At the top of each of the coloring functions, constansts are defined which can be tweaked as required
 
 ## Screeenshot
 

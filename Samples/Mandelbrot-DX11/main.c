@@ -529,7 +529,8 @@ typedef struct Constant_Layout {
 	float2 Center;
 	float Zoom;
 	float AspectRatio;
-	float padding[2];
+	float Time;
+	float padding;
 } Constant_Layout;
 #pragma pack(pop)
 
@@ -640,6 +641,9 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_l
 	result = g_device->lpVtbl->CreateBuffer(g_device, &cbuffer_desc, NULL, &constant_buffer);
 	DirectXHandleError(result);
 
+	LARGE_INTEGER frequency;
+	QueryPerformanceFrequency(&frequency);
+
 	g_zoom = 1;
 
 	bool running = true;
@@ -692,6 +696,10 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_l
 		params.Center = g_center;
 		params.Zoom = g_zoom;
 		params.AspectRatio = params.Resolution.x / params.Resolution.y;
+
+		LARGE_INTEGER counts;
+		QueryPerformanceCounter(&counts);
+		params.Time = (float)((double)counts.QuadPart / (double)frequency.QuadPart);
 
 		g_device_context->lpVtbl->UpdateSubresource(g_device_context, (ID3D11Resource *)constant_buffer, 0, NULL, &params, 0, 0);
 
