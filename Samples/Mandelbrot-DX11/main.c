@@ -265,7 +265,7 @@ void DirectXInitialize(HWND window) {
 	swap_chain_desc.BufferCount = 2;
 	swap_chain_desc.Width = 0;
 	swap_chain_desc.Height = 0;
-	swap_chain_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+	swap_chain_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	swap_chain_desc.Stereo = FALSE;
 	swap_chain_desc.SampleDesc.Count = 1;
 	swap_chain_desc.SampleDesc.Quality = 0;
@@ -743,7 +743,16 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_l
 				UINT subresource = 0;
 				HRESULT hr = g_device_context->lpVtbl->Map(g_device_context, (ID3D11Resource *)texture_to_save, subresource, D3D11_MAP_READ, 0, &resource);
 				if (SUCCEEDED(hr)) {
-					if (!stbi_write_png("ss.png", (int)desc.Width, (int)desc.Height, 4, resource.pData, (int)resource.RowPitch)) {
+					char filename[MAX_PATH];
+
+					SYSTEMTIME time;
+					GetLocalTime(&time);
+
+					snprintf(filename, MAX_PATH, "Capture_%d-%d-%d_%d-%d-%d-%d.png", 
+							 (int)time.wYear, (int)time.wMonth, (int)time.wDay, 
+							 (int)time.wHour, (int)time.wMinute, (int)time.wSecond, (int)time.wMilliseconds);
+
+					if (!stbi_write_png(filename, (int)desc.Width, (int)desc.Height, 4, resource.pData, (int)resource.RowPitch)) {
 						MessageBoxW(window, L"Failed to capture screen", L"Error", MB_OK | MB_ICONEXCLAMATION);
 					}
 					g_device_context->lpVtbl->Unmap(g_device_context, (ID3D11Resource *)texture_to_save, subresource);
