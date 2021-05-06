@@ -17,6 +17,10 @@
 #include <d3dcompiler.h>
 #pragma comment(lib, "d3dcompiler.lib")
 
+#define STB_IMAGE_WRITE_STATIC
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 //
 //
 //
@@ -51,6 +55,20 @@ static const float g_Vertices[] = {
 	-1, -1, -1, 1, 1, +1,
 	-1, -1, +1, 1, 1, -1
 };
+
+static bool g_take_screenshot = false;
+
+void TakeScreenshot() {
+	g_take_screenshot = true;
+}
+
+bool RecordFrame() {
+	return g_take_screenshot;
+}
+
+void RecordFrameHandled() {
+	g_take_screenshot = false;
+}
 
 //
 //
@@ -336,6 +354,8 @@ LRESULT CALLBACK WindowProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		case WM_KEYDOWN: {
 			if (wparam == VK_F11) {
 				ToggleFullscreen(wnd);
+			} else if (wparam == VK_F5 && ((lparam & (1 << 30)) != (1 << 30))) {
+				TakeScreenshot();
 			}
 		} break;
 
@@ -700,6 +720,44 @@ int __stdcall wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_l
 		LARGE_INTEGER counts;
 		QueryPerformanceCounter(&counts);
 		params.Time = (float)((double)counts.QuadPart / (double)frequency.QuadPart);
+
+		if (RecordFrame()) {
+			RecordFrameHandled();
+
+			ID3D11Texture2D *texture;
+			g_swap_chain->lpVtbl->GetBuffer(g_swap_chain, 1, &IID_ID3D11Texture2D, &texture);
+
+			D3D11_TEXTURE2D_DESC desc;
+			texture->lpVtbl->GetDesc(texture, &desc);
+			desc.BindFlags = 0;
+			desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+			desc.Usage = D3D11_USAGE_STAGING;
+
+			ID3D11Texture2D *texture_to_save = NULL;
+			g_device->lpVtbl->CreateTexture2D(g_device, &desc, NULL, &texture_to_save);
+
+			if (texture_to_save) {
+				g_device_context->lpVtbl->CopyResource(g_device_context, (ID3D11Resource *)texture_to_save, (ID3D11Resource *)texture);
+
+				D3D11_MAPPED_SUBRESOURCE resource;
+				UINT subresource = 0;
+				HRESULT hr = g_device_context->lpVtbl->Map(g_device_context, (ID3D11Resource *)texture_to_save, subresource, D3D11_MAP_READ, 0, &resource);
+				if (SUCCEEDED(hr)) {
+					if (!stbi_write_png("ss.png", (int)desc.Width, (int)desc.Height, 4, resource.pData, (int)resource.RowPitch)) {
+						MessageBoxW(window, L"Failed to capture screen", L"Error", MB_OK | MB_ICONEXCLAMATION);
+					}
+					g_device_context->lpVtbl->Unmap(g_device_context, (ID3D11Resource *)texture_to_save, subresource);
+				} else {
+					MessageBoxW(window, L"Failed to capture screen", L"Error", MB_OK | MB_ICONEXCLAMATION);
+				}
+
+				texture_to_save->lpVtbl->Release(texture_to_save);
+			} else {
+				MessageBoxW(window, L"Failed to capture screen", L"Error", MB_OK | MB_ICONEXCLAMATION);
+			}
+
+			texture->lpVtbl->Release(texture);
+		}
 
 		g_device_context->lpVtbl->UpdateSubresource(g_device_context, (ID3D11Resource *)constant_buffer, 0, NULL, &params, 0, 0);
 
