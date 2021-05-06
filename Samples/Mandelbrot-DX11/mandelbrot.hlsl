@@ -41,9 +41,9 @@ float3 Mandelbrot_SimpleColoring(float2 c) {
 }
 
 float3 Mandelbrot_WaveColoring(float2 c) {
-	const uint MaxIterations = 500;
+	const uint MaxIterations = 200;
 	const float Radius = 2.0;
-	const float Amount = 0.1;
+	const float Amount = 0.7;
 	
 	float2 z = float2(0, 0);
 	uint iterations = 0;
@@ -53,9 +53,9 @@ float3 Mandelbrot_WaveColoring(float2 c) {
 	}
 	
 	float3 color;
-	color.x = 0.5 * sin(Amount * iterations + 4.188) + 0.5;
-	color.y = 0.5 * sin(Amount * iterations) + 0.5;
-	color.z = 0.5 * sin(Amount * iterations + 2.094) + 0.5;
+	color.z = 0.5 * sin(Amount * iterations + 4.188) + 0.5;
+	color.x = 0.5 * sin(Amount * iterations) + 0.5;
+	color.y = 0.5 * sin(Amount * iterations + 2.094) + 0.5;
 	
 	return color;
 }
@@ -63,7 +63,7 @@ float3 Mandelbrot_WaveColoring(float2 c) {
 float3 Mandelbrot_WaveColoringAnimated(float2 c) {
 	const uint MaxIterations = 500;
 	const float Radius = 2.0;
-	const float Amount = 0.1;
+	const float Amount = 0.07;
 	const float Speed = 1;
 	
 	float2 z = float2(0, 0);
@@ -74,9 +74,9 @@ float3 Mandelbrot_WaveColoringAnimated(float2 c) {
 	}
 	
 	float3 color;
-	color.x = 0.5 * sin(Time * Speed + Amount * iterations + 4.188) + 0.5;
-	color.y = 0.5 * sin(Time * Speed + Amount * iterations) + 0.5;
-	color.z = 0.5 * sin(Time * Speed + Amount * iterations + 2.094) + 0.5;
+	color.z = 0.5 * sin(Time * Speed + Amount * iterations + 4.188) + 0.5;
+	color.x = 0.5 * sin(Time * Speed + Amount * iterations) + 0.5;
+	color.y = 0.5 * sin(Time * Speed + Amount * iterations + 2.094) + 0.5;
 	
 	return color;
 }
@@ -96,10 +96,13 @@ float3 Mandelbrot_SmoothColoring(float2 c) {
 		iterations += 1;
 	}
 	
+	
+	float value = 0;
 	 if (iterations < MaxIterations) {
         float log_zn = log(z.x * z.x + z.y * z.y) / 2.0;
         float nu = log(log_zn / log(2)) / log(2);
         iterations = iterations + 1 - nu;
+		value = Value;
 	}
 
 	float hue1 = (float)iterations / (float)MaxIterations;
@@ -107,7 +110,7 @@ float3 Mandelbrot_SmoothColoring(float2 c) {
     float hue = lerp(hue1, hue2, iterations % 1);
 	hue = MinHue + hue * (MaxHue - MinHue);
 	
-	float3 color = HSV2RGB(float3(hue, Saturation, Value));
+	float3 color = HSV2RGB(float3(hue, Saturation, value));
 	
 	return color;
 }
