@@ -25,8 +25,6 @@ if not exist "bin" mkdir bin
 :MSVC
 where cl >nul 2>nul
 if %ERRORLEVEL% neq 0 goto SkipMSVC
-where rc >nul 2>nul
-if %ERRORLEVEL% neq 0 goto SkipMSVC
 echo Building with Msvc
 if not exist "bin\MsvcBuild" mkdir bin\MsvcBuild
 pushd bin\MsvcBuild
@@ -41,12 +39,9 @@ echo -------------------------------------
 :CLANG
 where clang >nul 2>nul
 IF %ERRORLEVEL% NEQ 0 goto SkipCLANG
-where llvm-rc >nul 2>nul
-IF %ERRORLEVEL% NEQ 0 goto SkipCLANG
 echo Building with CLANG
 if not exist "bin\ClangBuild" mkdir bin\ClangBuild
 pushd bin\ClangBuild
-call llvm-rc %ResourceFileIn%
 call clang -Wno-switch -Wno-pointer-sign -Wno-enum-conversion -D_CRT_SECURE_NO_WARNINGS -D_GLFW_WIN32 %CLANGFlags% %SourceFiles% -o mandelbrot.exe -luser32.lib -lgdi32.lib -lshell32.lib -lopengl32.lib
 popd
 echo -------------------------------------
