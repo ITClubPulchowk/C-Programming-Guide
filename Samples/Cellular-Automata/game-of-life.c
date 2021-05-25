@@ -13,9 +13,11 @@ rem echo %var %
 
 set inc_path="PATH TO THE INCLUDE FOLDER"						
 set lib_path="PATH TO THE LIB FOLDER"
+set dll_path="PATH TO SDL2.lib"
 set exec_name="Game Of Life.exe"
 
-cl .\main.c /Fe%exec_name% /I%inc_path% /link /LIBPATH:%lib_path% SDL2.lib SDL2main.lib /subsystem:console
+xcopy %dll_path% .\ /Y
+cl .\main.c /Fe%exec_name% /I%inc_path% /link /LIBPATH:%lib_path% SDL2.lib SDL2main.lib shell32.lib /subsystem:console
 
 --------------------------------------
 compilation using gcc(for linux):
