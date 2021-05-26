@@ -32,6 +32,7 @@ gcc main.c -lSDL2 -o main
 #include <string.h>
 #include <stdlib.h>
 
+#define CELL_WIDTH 8
 #define ROW_WIDTH 160
 #define COL_WIDTH 100
 #define true 1
@@ -72,65 +73,95 @@ void set(int x, int y, char *string, int *state)
 		state[y * ROW_WIDTH + x + p] = *string == '#' ? 1 : 0;
 }
 
+void reset_screen(int* state, int* output, int size)
+{
+	memset(output, 0, size);
+	memset(state, 0, size);
+}
+
+#define BUFFER_SIZE (sizeof(int) * (ROW_WIDTH * COL_WIDTH))
+
+void create_glider_gun(int* state)
+{
+	set(60, 45, "........................#............", state);
+	set(60, 46, "......................#.#............", state);
+	set(60, 47, "............##......##............##.", state);
+	set(60, 48, "...........#...#....##............##.", state);
+	set(60, 49, "##........#.....#...##...............", state);
+	set(60, 50, "##........#...#.##....#.#............", state);
+	set(60, 51, "..........#.....#.......#............", state);
+	set(60, 52, "...........#...#.....................", state);
+	set(60, 53, "............##.......................", state);
+}
+
+void create_r_pentomino(int* state)
+{
+	set(80, 50, "  ## ", state);
+	set(80, 51, " ##  ", state);
+	set(80, 52, "  #  ", state);
+}
+
+void create_die_hard(int* state)
+{
+	set(60, 50, ".......#.", state);
+	set(60, 51, ".##......", state);
+	set(60, 52, "..#...###", state);
+}
+
+void create_acorn(int* state)
+{
+	set(60, 50, "..#......", state);
+	set(60, 51, "....#....", state);
+	set(60, 52, ".##..###", state);
+}
+
+void create_space_rake(int* state)
+{
+	set(20, 20, "...........##.....####", state);
+	set(20, 21, ".........##.##...#...#", state);
+	set(20, 22, ".........####........#", state);
+	set(20, 23, "..........##.....#..#.", state);
+	set(20, 24, "......................", state);
+	set(20, 25, "........#.............", state);
+	set(20, 26, ".......##........##...", state);
+	set(20, 27, "......#.........#..#..", state);
+	set(20, 28, ".......#####....#..#..", state);
+	set(20, 29, "........####...##.##..", state);
+	set(20, 30, "...........#....##....", state);
+	set(20, 31, "......................", state);
+	set(20, 32, "......................", state);
+	set(20, 33, "......................", state);
+	set(20, 34, "..................####", state);
+	set(20, 35, "#..#.............#...#", state);
+	set(20, 36, "....#................#", state);
+	set(20, 37, "#...#............#..#.", state);
+	set(20, 38, ".####.................", state);
+}
+
+void create_infinite_growth(int* state)
+{
+	set(20, 50, "########.#####...###......#######.#####", state);
+}
+
+void draw_cell(int value, int x, int y, SDL_Rect rect)
+{
+	SDL_SetRenderDrawColor(_renderer, value * 255, value * 255, value * 255, 255);
+	rect.x = x * rect.w;
+	rect.y = y * rect.h;
+	SDL_RenderFillRect(_renderer, &rect);
+}
+
 int main(int argc, char **argv)
 {
 	if (init_sdl_and_create_window())
 	{
 		//Creating two cells to make it so that the state of the board wouldn't be changed when interrogating it
-		int *output = malloc(sizeof(int) * (ROW_WIDTH * COL_WIDTH));
-		int *state = malloc(sizeof(int) * (ROW_WIDTH * COL_WIDTH));
-		memset(output, 0, ROW_WIDTH * COL_WIDTH * sizeof(int));
-		memset(state, 0, ROW_WIDTH * COL_WIDTH * sizeof(int));
+		int *output = malloc(BUFFER_SIZE);
+		int *state = malloc(BUFFER_SIZE);
+		
+		reset_screen(state, output, BUFFER_SIZE);
 
-		// Infinite Growth
-		set(20, 50, "########.#####...###......#######.#####", state);
-
-		//can uncomment these and test
-		/*
-		// Gosper Glider Gun
-		set(60, 45, "........................#............", state);
-		set(60, 46, "......................#.#............", state);
-		set(60, 47, "............##......##............##.", state);
-		set(60, 48, "...........#...#....##............##.", state);
-		set(60, 49, "##........#.....#...##...............", state);
-		set(60, 50, "##........#...#.##....#.#............", state);
-		set(60, 51, "..........#.....#.......#............", state);
-		set(60, 52, "...........#...#.....................", state);
-		set(60, 53, "............##.......................", state);
-		// R-Pentomino
-		set(80, 50, "  ## ", state);
-		set(80, 51, " ##  ", state);
-		set(80, 52, "  #  ", state);
-		//Die Hard
-		set(60, 50, ".......#.", state);
-		set(60, 51, ".##......", state);
-		set(60, 52, "..#...###", state);
-		//Acorn
-		set(60, 50, "..#......", state);
-		set(60, 51, "....#....", state);
-		set(60, 52, ".##..###", state);
-
-		//Space Rake
-		set(20, 20, "...........##.....####", state);
-		set(20, 21, ".........##.##...#...#", state);
-		set(20, 22, ".........####........#", state);
-		set(20, 23, "..........##.....#..#.", state);
-		set(20, 24, "......................", state);
-		set(20, 25, "........#.............", state);
-		set(20, 26, ".......##........##...", state);
-		set(20, 27, "......#.........#..#..", state);
-		set(20, 28, ".......#####....#..#..", state);
-		set(20, 29, "........####...##.##..", state);
-		set(20, 30, "...........#....##....", state);
-		set(20, 31, "......................", state);
-		set(20, 32, "......................", state);
-		set(20, 33, "......................", state);
-		set(20, 34, "..................####", state);
-		set(20, 35, "#..#.............#...#", state);
-		set(20, 36, "....#................#", state);
-		set(20, 37, "#...#............#..#.", state);
-		set(20, 38, ".####.................", state);
-		*/
+		create_infinite_growth(state);
 
 		int is_running = true;
 		int begin = false;
@@ -139,49 +170,102 @@ int main(int argc, char **argv)
 
 		while (is_running)
 		{
+			int mouse_x, mouse_y;
+			int left_clicked = false;
 			while (SDL_PollEvent(&event))
 			{
+				SDL_GetMouseState(&mouse_x, &mouse_y);
+
+				left_clicked = (event.type == SDL_MOUSEBUTTONDOWN) && (event.button.button == SDL_BUTTON_LEFT);
+
 				if (event.type == SDL_QUIT)
 					is_running = false;
 				if (event.type == SDL_KEYDOWN)
 				{
-					if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
-						is_running = false;
-					if (event.key.keysym.scancode == SDL_SCANCODE_SPACE)
-						begin = !begin;
+					
+					switch(event.key.keysym.scancode)
+					{
+						case SDL_SCANCODE_ESCAPE:
+							is_running = false;
+							break;
+						case SDL_SCANCODE_SPACE:
+							begin = !begin;
+							break;
+						case SDL_SCANCODE_0:
+							reset_screen(state, output, BUFFER_SIZE);
+							break;
+						case SDL_SCANCODE_1:
+							reset_screen(state, output, BUFFER_SIZE);
+							create_infinite_growth(state);
+							break;
+						case SDL_SCANCODE_2:
+							reset_screen(state, output, BUFFER_SIZE);
+							create_r_pentomino(state);
+							break;
+						case SDL_SCANCODE_3:
+							reset_screen(state, output, BUFFER_SIZE);
+							create_space_rake(state);
+							break;
+						case SDL_SCANCODE_4:
+							reset_screen(state, output, BUFFER_SIZE);
+							create_acorn(state);
+							break;
+						case SDL_SCANCODE_5:
+							reset_screen(state, output, BUFFER_SIZE);
+							create_die_hard(state);
+							break;
+						case SDL_SCANCODE_6:
+							reset_screen(state, output, BUFFER_SIZE);
+							create_glider_gun(state);
+							break;
+					}
 				}
 			}
 
+			SDL_Rect rect = {0, 0, CELL_WIDTH, CELL_WIDTH}; //creating 8x8 cells
+
 			//Pauses the game
-			if (!begin)
-				continue;
+			if (begin)
+			{				
+				for (int i = 0; i < ROW_WIDTH * COL_WIDTH; i++)
+					output[i] = state[i];
 
-			for (int i = 0; i < ROW_WIDTH * COL_WIDTH; i++)
-				output[i] = state[i];
+				SDL_SetRenderDrawColor(_renderer, 255, 0, 0, 255);
+				SDL_RenderClear(_renderer);
 
-			SDL_SetRenderDrawColor(_renderer, 255, 0, 0, 255);
-			SDL_RenderClear(_renderer);
-			SDL_Rect rect = {0, 0, 8, 8}; //creating 8x8 cells
-
-			for (int y = 1; y < COL_WIDTH - 1; y++)
-			{
-				for (int x = 1; x < ROW_WIDTH - 1; x++)
+				for (int y = 1; y < COL_WIDTH - 1; y++)
 				{
-					int neighbours = cell(x - 1, y - 1) + cell(x, y - 1) + cell(x + 1, y - 1) +
-									 cell(x - 1, y + 0) + 0 + cell(x + 1, y + 0) +
-									 cell(x - 1, y + 1) + cell(x, y + 1) + cell(x + 1, y + 1);
+					for (int x = 1; x < ROW_WIDTH - 1; x++)
+					{
+						int neighbours = cell(x - 1, y - 1) + cell(x, y - 1) + cell(x + 1, y - 1) +
+										 cell(x - 1, y + 0) + 0 + cell(x + 1, y + 0) +
+										 cell(x - 1, y + 1) + cell(x, y + 1) + cell(x + 1, y + 1);
 
-					if (cell(x, y) == 1)
-						state[y * ROW_WIDTH + x] = neighbours == 2 || neighbours == 3;
-					else
-						state[y * ROW_WIDTH + x] = neighbours == 3;
+						if (cell(x, y) == 1)
+							state[y * ROW_WIDTH + x] = neighbours == 2 || neighbours == 3;
+						else
+							state[y * ROW_WIDTH + x] = neighbours == 3;
 
-					int value = cell(x, y);
-					SDL_SetRenderDrawColor(_renderer, value * 255, value * 255, value * 255, 255);
-					rect.x = x * rect.w;
-					rect.y = y * rect.h;
-					SDL_RenderFillRect(_renderer, &rect);
+						draw_cell(cell(x,y), x, y, rect);
+					}
 				}
+			}
+			else
+			{
+				if(left_clicked)
+				{
+					state[(mouse_y / CELL_WIDTH) * ROW_WIDTH + (mouse_x / CELL_WIDTH)] = !state[(mouse_y / CELL_WIDTH) * ROW_WIDTH + (mouse_x / CELL_WIDTH)];
+				}
+
+				for (int i = 0; i < ROW_WIDTH * COL_WIDTH; i++)
+					output[i] = state[i];
+
+				SDL_SetRenderDrawColor(_renderer, 255, 0, 0, 255);
+				SDL_RenderClear(_renderer);
+
+				for (int y = 1; y < COL_WIDTH - 1; y++)
+					for (int x = 1; x < ROW_WIDTH - 1; x++)
+						draw_cell(cell(x,y), x, y, rect);
 			}
 
 			SDL_RenderPresent(_renderer);
