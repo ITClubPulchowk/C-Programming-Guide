@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SOURCEFILES=../*.c
+SOURCEFILES=../flowfield.c
 OUTPUTFILE=flowfield.o
 
 if [ ! -d "./bin" ]; then
@@ -17,7 +17,7 @@ then
   exit
 fi
 pushd bin
-gcc $SOURCEFILES -o $OUTPUTFILE -w -Wall -lSDL2main -lSDL2
+gcc $SOURCEFILES -o $OUTPUTFILE -w -Wall -lSDL2main -lSDL2 -lm
 popd
 echo -------------------------
 echo GCC build Complete
