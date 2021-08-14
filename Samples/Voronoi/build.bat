@@ -23,7 +23,15 @@ echo -------------------------------------
 :DoneConfig
 
 if not exist "Libraries" mkdir Libraries
-if exist "Libraries/SDL2" goto SkipDownloadSDL
+where cl >nul 2>nul
+IF %ERRORLEVEL% NEQ 0 goto CheckForClang
+goto DownloadSDL
+:CheckForClang
+where clang >nul 2>nul
+IF %ERRORLEVEL% NEQ 0 goto SkipDownloadSDL
+:DownloadSDL
+if exist "Libraries/SDL2/SDL2-2.0.14" goto SkipDownloadSDLMinGw
+echo Downloading SDL
 
 pushd Libraries
 mkdir SDL2
@@ -32,10 +40,15 @@ tar -zxvf SDL2.zip -C SDL2
 del SDL2.zip
 ren "SDL2\SDL2-2.0.14\include" "SDL2"
 popd
+goto SkipDownloadSDLMinGw
 
 :SkipDownloadSDL
 
-if exist "Libraries/SDL2MinGw" goto SkipDownloadSDLMinGw
+where gcc >nul 2>nul
+IF %ERRORLEVEL% NEQ 0 goto SkipDownloadSDLMinGw
+
+if exist "Libraries/SDL2MinGw/SDL2-2.0.14/" goto SkipDownloadSDLMinGw
+echo Downloading SDLMinGw
 
 pushd Libraries
 mkdir SDL2MinGw
