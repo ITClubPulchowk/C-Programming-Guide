@@ -1,0 +1,16 @@
+@version 0.2.1
+
+# Made With -setup
+
+Type=Project;
+Optimization=false;
+BuildDirectory=./bin;
+Build=flowfield_muda;
+Define=;
+IncludeDirectory=../Libraries/SDL2/SDL2-2.0.14/;
+Source=flowfield.c;
+
+[WINDOWS]
+Subsystem: windows;
+Library=SDL2 SDL2main Shell32;
+LibraryDirectory=../Libraries/SDL2/SDL2-2.0.14/lib/x64/;
