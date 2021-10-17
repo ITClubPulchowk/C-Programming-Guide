@@ -2,6 +2,8 @@
 
 setlocal
 
+pushd ..
+
 if not exist "Libraries" mkdir Libraries
 if exist "Libraries/SDL2/SDL2-2.0.14" goto SkipDownloadSDL
 echo Downloading SDL
@@ -27,3 +29,5 @@ popd
 
 :SkipDownloadSDLMinGw
 echo -------------------
+
+popd
