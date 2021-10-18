@@ -1,0 +1,10 @@
+@version 1.2.0
+
+Kind: Project;
+Build: Mandelbrot-DX11;
+BuildDirectory: ./bin;
+
+Defines: _CRT_SECURE_NO_WARNINGS UNICODE;
+Sources: main.c;
+ResourceFile: Resource.rc;
+Subsystem: Windows;

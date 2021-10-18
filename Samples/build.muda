@@ -2,6 +2,11 @@
 
 Kind: Solution;
 
-# Here "Libraries" directory is being ignored because it is not a project directory
-# The rest of the directories are ignored, because muda doesn't support Resource compiling yet :(
-IgnoredDirectories: Libraries Resources Mandelbrot-DX11 Mandelbrot-GPU Michi; 
+# Here "Libraries" and "Resources" directories are being ignored because it is not a project directory
+IgnoredDirectories: Libraries Resources; 
+
+:OS.LINUX
+IgnoredDirectories: Mandelbrot-DX11;
+
+:OS.MAC
+IgnoredDirectories: Mandelbrot-DX11;

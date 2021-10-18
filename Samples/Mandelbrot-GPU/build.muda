@@ -4,23 +4,26 @@ Kind               : Project;
 Language           : C;
 Application        : Executable;
 Optimization       : False;
-Build              : mandelbrot;
+Build              : Mandelbrot-GPU;
 BuildDirectory     : ./bin;
 
 Sources: main.c glfw/src/context.c glfw/src/egl_context.c glfw/src/init.c glfw/src/input.c;
 Sources: glfw/src/monitor.c glfw/src/osmesa_context.c glfw/src/vulkan.c glfw/src/window.c;
+Sources: glad/src/glad.c;
 
-Defines            : _CRT_SECURE_NO_WARNINGS ;
+IncludeDirectories: glfw/include glad/include;
+
+Defines            : _CRT_SECURE_NO_WARNINGS;
 Subsystem          : Console;
 
 :OS.WINDOWS
+ResourceFile: resource.rc;
 Defines: _GLFW_WIN32;
 Sources: glfw/src/wgl_context.c glfw/src/win32_init.c glfw/src/win32_joystick.c glfw/src/win32_monitor.c;
 Sources: glfw/src/win32_thread.c glfw/src/win32_time.c glfw/src/win32_window.c;
 Libraries: user32 gdi32 shell32 opengl32;
 
 : OS.LINUX
-Defines: _GLFW_X11;
 Sources: glfw/src/glx_context.c glfw/src/linux_joystick.c glfw/src/posix_thread.c glfw/src/posix_time.c;
 Sources: glfw/src/x11_init.c glfw/src/x11_monitor.c glfw/src/x11_window.c glfw/src/xkb_unicode.c;
 Libraries: dl GL pthread m;
