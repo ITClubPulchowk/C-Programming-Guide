@@ -1,2 +1,4 @@
 bin/
 Samples/Libraries/
+/Samples/.muda/muda.dll
+/Samples/build.log
