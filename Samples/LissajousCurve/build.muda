@@ -21,19 +21,19 @@ Prebuild  : ..\install_sdl.bat;
 Libraries          : SDL2 SDL2main Shell32;
 LibraryDirectories : ../Libraries/SDL2/SDL2-2.0.14/lib/x64/;
 IncludeDirectories : ../Libraries/SDL2/SDL2-2.0.14/;
-Postbuild : xcopy ..\Libraries\SDL2\SDL2-2.0.14\lib\x64\SDL2.dll .\bin\ /Y;
+Postbuild : "xcopy ..\Libraries\SDL2\SDL2-2.0.14\lib\x64\SDL2.dll .\bin\ /Y";
 
 :COMPILER.CLANG
 Libraries          : SDL2 SDL2main Shell32;
 LibraryDirectories : ../Libraries/SDL2/SDL2-2.0.14/lib/x64/;
 IncludeDirectories : ../Libraries/SDL2/SDL2-2.0.14/;
-Postbuild : xcopy ..\Libraries\SDL2\SDL2-2.0.14\lib\x64\SDL2.dll .\bin\ /Y;
+Postbuild : "xcopy ..\Libraries\SDL2\SDL2-2.0.14\lib\x64\SDL2.dll .\bin\ /Y";
 
 :COMPILER.GCC
 Libraries          : SDL2 SDL2main Shell32;
 LibraryDirectories : ../Libraries/SDL2MinGw/SDL2-2.0.14/i686-w64-mingw32/lib/;
 IncludeDirectories : ../Libraries/SDL2MinGw/SDL2-2.0.14/i686-w64-mingw32/include/;
-Postbuild : xcopy ..\Libraries\SDL2MinGw\SDL2-2.0.14\i686-w64-mingw32\bin\SDL2.dll .\bin\ /Y;
+Postbuild : "xcopy ..\Libraries\SDL2MinGw\SDL2-2.0.14\i686-w64-mingw32\bin\SDL2.dll .\bin\ /Y";
 
 :OS.LINUX
 Libraries: SDL2;
